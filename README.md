@@ -1,7 +1,5 @@
 # Taller 3 · Taller de Programación en R (2026-2)
 
-Universidad de los Andes, Facultad de Economía
-Profesor: Santiago Neira Hernández
 
 Datos geoespaciales, web scraping y herramientas de visualización.
 
