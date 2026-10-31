@@ -1,1 +1,344 @@
+# ==============================================================================
+# BLOQUE 1: PAQUETES Y CARGA DE BASES
+# ==============================================================================
 
+rm(list = ls())
+
+# PAQUETES NO VISTOS EN CLASE:
+# - readxl: lee el Excel del IDF, que openxlsx no puede abrir
+# - sf: lee los shapefiles del MGN (ningún paquete visto lee shapefiles)
+
+library(openxlsx)
+library(tidyverse)
+library(readxl)  # [NO VISTO EN CLASE]
+library(sf)      # [NO VISTO EN CLASE]
+library(ggrepel)
+
+setwd("C:/Users/Daniel/OneDrive/Escritorio/2026-2/R/Taller 3/Bases de Datos")
+
+# ---------- IDF municipal 2024 (DNP) ----------
+# Fuente: DNP, Consulta detalle de resultados IDF 2024. Descargado el 29/10/2026
+# CUIDADO: openxlsx no abre este archivo; se usa read_excel()
+# skip = 16 salta las 16 filas de título; la fila 17 trae los nombres de columna
+IDF_2024 <- read_excel("ConsultaIDF_2024_IDF - Municipios_20261029181249.xlsx",
+                       sheet = 1,
+                       skip = 16)  # [NO VISTO EN CLASE]
+IDF_2024 <- as.data.frame(IDF_2024)  # convierte el tibble de readxl en data frame
+
+# ---------- Proyecciones de población (DANE) ----------
+# Fuente: DANE, Serie municipal de población por área 2018-2042. Descargado el 29/10/2026
+# Hoja 3 = "PobMunicipalxÁrea" (se usa el número para evitar problemas con la tilde)
+DANE_proyecciones <- read.xlsx("PPED-AreaMun-2018-2042_VP.xlsx",
+                               sheet = 3,
+                               startRow = 8)
+
+# ---------- Valor agregado municipal (DANE) ----------
+# Fuente: DANE, Valor agregado por municipio 2011-2024p. Descargado el 29/10/2026
+# Cuadro 1 = serie completa a precios corrientes, miles de millones de pesos
+DANE_VA <- read.xlsx("anex-PIBDep-ValorAgreMuni-2011-2024p.xlsx",
+                      sheet = "Cuadro 1",
+                      startRow = 11)
+
+# ---------- Shapefiles MGN 2025 (DANE) ----------
+# Fuente: DANE Geoportal, MGN2025 nivel departamento y municipio. Descargado el 29/10/2026
+# list.files() busca el .shp dentro de cada carpeta, sin escribir su nombre a mano
+shp_dep <- list.files("MGN2025_DPTO_POLITICO", pattern = "\\.shp$", full.names = TRUE)
+shp_mun <- list.files("MGN2025_MPIO_GRAFICO",  pattern = "\\.shp$", full.names = TRUE)
+
+shapefile_dep <- st_read(shp_dep)  # [NO VISTO EN CLASE]
+shapefile_mun <- st_read(shp_mun)  # [NO VISTO EN CLASE]
+
+# ==============================================================================
+# BLOQUE 2: PROYECCIONES DE POBLACIÓN EN FORMATO ANCHO Y UNIÓN DE LA BASE
+# ==============================================================================
+DANE_proyecciones_ancho <- DANE_proyecciones %>%
+  filter(!is.na(AÑO)) %>%
+  pivot_wider(names_from = AÑO,
+              values_from = TOTAL,
+              names_prefix = "pob_")
+
+# ---------- Población 2024 (L_i) ----------
+poblacion_2024 <- DANE_proyecciones_ancho %>%
+  filter(ÁREA.GEOGRÁFICA == "Total") %>%
+  select(MPIO, DPMP, DP, DPNOM, pob_2024)
+
+# ---------- Valor agregado 2023 (VA_i) ----------
+valor_agregado_2023 <- DANE_VA %>%
+  filter(!is.na(Código.Departamento)) %>%
+  select(Código.Municipio, Municipio, Código.Departamento, Departamento, `2023`) %>%
+  rename(MPIO = Código.Municipio,
+         DPMP = Municipio,
+         DP = Código.Departamento,
+         DPNOM = Departamento,
+         va_2023 = `2023`)
+
+# ---------- IDF 2024 (IDF_i) ----------
+# Solo el código y el IDF final; las demás columnas del DNP no se usan
+idf_2024 <- IDF_2024 %>%
+  select(`Código Entidad`, IDF) %>%
+  rename(MPIO = `Código Entidad`)
+
+# ---------- Unión ----------
+base_pob_va <- poblacion_2024 %>%
+  left_join(valor_agregado_2023 %>%
+              select(MPIO, va_2023),
+            by = "MPIO") %>%
+  left_join(idf_2024, by = "MPIO")
+
+# ---------- Verificación de la unión ----------
+nrow(anti_join(valor_agregado_2023, poblacion_2024, by = "MPIO"))  # esperado: 0
+nrow(anti_join(poblacion_2024, valor_agregado_2023, by = "MPIO"))  # esperado: 0
+nrow(anti_join(idf_2024, poblacion_2024, by = "MPIO"))  # esperado: 0 (todo el IDF encuentra pareja)
+nrow(anti_join(poblacion_2024, idf_2024, by = "MPIO"))  # esperado: 20 (19 ANM + San Andrés)
+dim(base_pob_va)                                        # esperado: 1123 x 7
+sum(is.na(base_pob_va$IDF))                             # esperado: 20
+
+# ==============================================================================
+# BLOQUE 3: PROYECCIÓN DEL VA Y PONDERADORES w_i
+# ==============================================================================
+# ---------- Parámetro: crecimiento del PIB nominal 2024 ----------
+# Fuente: DANE, PIB total por departamentos (publicación 3 de julio de 2026), fila COLOMBIA,
+# precios corrientes: (1.713.316 / 1.587.200 - 1) * 100 = 7,9458 -> 7,95
+# Se usa la tasa nominal porque el VA está a precios corrientes (la real fue 1,5 %)
+
+tasa_pib_2024 <- 7.95
+
+# ---------- w_i por departamento ----------
+# Se quitan las 20 unidades sin IDF (19 ANM + San Andrés) ANTES de calcular las sumas
+IDF_DEP <- base_pob_va %>%
+  filter(!is.na(IDF)) %>%
+  rename(L_i = pob_2024) %>%
+  mutate(VA_i = va_2023 * (1 + tasa_pib_2024 / 100),
+         L_VA_i = L_i * VA_i) %>%
+  group_by(DP) %>%
+  mutate(sum_L_VA_k = sum(L_VA_i),
+         w_i = L_VA_i / sum_L_VA_k) %>%
+  ungroup()
+
+# ---------- Verificación: los w_i suman 1 en cada departamento ----------
+nrow(IDF_DEP)  # esperado: 1103
+
+verif_w <- IDF_DEP %>%
+  group_by(DP, DPNOM) %>%
+  summarise(n_mun = n(),
+            suma_w = sum(w_i)) %>%
+  ungroup()
+
+verif_w  # esperado: 33 departamentos, suma_w = 1
+
+# CUIDADO: se compara con una tolerancia y no con == 1, porque el computador
+# puede dar 0.9999999999999999 al sumar decimales
+w_suman_1 <- all(abs(verif_w$suma_w - 1) < 1e-10)
+
+cat("Departamentos verificados:", nrow(verif_w), "\n")
+cat("Suma mínima de w_i:", min(verif_w$suma_w), "\n")
+cat("Suma máxima de w_i:", max(verif_w$suma_w), "\n")
+cat("¿Los w_i suman 1 en todos los departamentos?", ifelse(w_suman_1, "SÍ", "NO"), "\n")
+
+# ==============================================================================
+# BLOQUE 4: IDF DEPARTAMENTAL
+# ==============================================================================
+IDF_departamental <- IDF_DEP %>%
+  group_by(DP, DPNOM) %>%
+  summarise(IDF_dep = sum(w_i * IDF)) %>%
+  ungroup()
+
+IDF_departamental  # esperado: 33 filas
+
+# ==============================================================================
+# BLOQUE 5: MAPA DEL IDF DEPARTAMENTAL
+# ==============================================================================
+
+# ---------- Paleta DANE (Manual de Identidad Visual, p. 30) ----------
+color_dane_oscuro   <- "#7D0641"  # Variación oscura, Pantone 216 C
+color_dane_primario <- "#B6004C"  # Color primario (Magenta DANE), Pantone 7425 C
+color_dane_claro    <- "#DF396B"  # Variación clara, Pantone 191 C
+color_dane_30       <- "#F3DCE4"  # Tinte al 30 % (aproximado de la muestra del manual)
+
+# ---------- Verificación de llaves antes de unir ----------
+nrow(shapefile_dep)  # esperado: 33
+sum(!(shapefile_dep$dpto_ccdgo %in% IDF_departamental$DP))  # esperado: 0
+sum(!(IDF_departamental$DP %in% shapefile_dep$dpto_ccdgo))  # esperado: 0
+
+# ---------- Unión del shapefile con el IDF departamental ----------
+# CUIDADO: el shapefile va primero en el left_join para que el resultado siga siendo un objeto sf
+mapa_idf_dep <- shapefile_dep %>%
+  left_join(IDF_departamental, by = c("dpto_ccdgo" = "DP"))
+
+# ---------- San Andrés aparte (recuadro) ----------
+# CUIDADO: los límites de la escala se calculan con TODOS los departamentos,
+# para que el recuadro y el mapa principal usen los mismos colores
+limites_idf_dep <- range(mapa_idf_dep$IDF_dep)
+
+mapa_dep_continental <- mapa_idf_dep %>% filter(dpto_ccdgo != "88")
+mapa_dep_islas       <- mapa_idf_dep %>% filter(dpto_ccdgo == "88")
+
+p_recuadro_dep <- ggplot(mapa_dep_islas) +
+  geom_sf(aes(fill = IDF_dep),
+          color = "grey40",
+          linewidth = 0.2) +
+  scale_fill_gradientn(colours = c(color_dane_30, color_dane_claro,
+                                   color_dane_primario, color_dane_oscuro),
+                       limits = limites_idf_dep,
+                       guide = "none") +
+  # Zoom a San Andrés (abajo) y Providencia (arriba), en longitud y latitud
+  coord_sf(xlim = c(-81.8, -81.3), ylim = c(12.45, 13.42), expand = FALSE) +
+  labs(title = paste0("San Andrés y Providencia\n", sprintf("%.1f", mapa_dep_islas$IDF_dep))) +
+  theme_void() +
+  theme(plot.title = element_text(size = 6, hjust = 0.5),
+        plot.background = element_rect(fill = "white", color = "grey40", linewidth = 0.4))
+
+# ---------- Posición del recuadro: esquina superior izquierda ----------
+# st_bbox() da los bordes del mapa continental (xmin, xmax, ymin, ymax)
+caja_dep  <- st_bbox(mapa_dep_continental)  # [NO VISTO EN CLASE]
+ancho_dep <- as.numeric(caja_dep["xmax"] - caja_dep["xmin"])
+alto_dep  <- as.numeric(caja_dep["ymax"] - caja_dep["ymin"])
+
+# ---------- Etiquetas ----------
+# 11 = Bogotá, 17 = Caldas, 63 = Quindío, 66 = Risaralda
+deptos_burbuja <- c("11", "17", "63", "66")
+
+mapa_dep_continental <- mapa_dep_continental %>%
+  mutate(etiqueta = sprintf("%.1f", IDF_dep),  # sprintf: número como texto con 1 decimal
+         color_texto = ifelse(IDF_dep >= median(mapa_idf_dep$IDF_dep), "white", "black"))
+
+etiquetas_mapa    <- mapa_dep_continental %>% filter(!(dpto_ccdgo %in% deptos_burbuja))
+etiquetas_burbuja <- mapa_dep_continental %>% filter(dpto_ccdgo %in% deptos_burbuja) %>% arrange(dpto_ccdgo)
+
+# ---------- Mapa ----------
+p_mapa_idf_dep <- ggplot(mapa_dep_continental) +
+  geom_sf(aes(fill = IDF_dep),
+          color = "white",
+          linewidth = 0.2) +
+  geom_sf_text(data = etiquetas_mapa,
+               aes(label = etiqueta, color = color_texto),
+               size = 2.5) +
+  geom_label_repel(data = etiquetas_burbuja,
+                   aes(label = paste0(DPNOM, ": ", etiqueta), geometry = geometry),
+                   stat = "sf_coordinates",
+                   nudge_x = c(4, -5, -5, -5),
+                   nudge_y = c(0, 1.2, -1.2, 0),
+                   min.segment.length = 0,
+                   size = 2.8,
+                   fill = "white",
+                   color = color_dane_oscuro,
+                   segment.color = color_dane_oscuro) +
+  annotation_custom(ggplotGrob(p_recuadro_dep),
+                    xmin = as.numeric(caja_dep["xmin"]),
+                    xmax = as.numeric(caja_dep["xmin"]) + 0.20 * ancho_dep,
+                    ymin = as.numeric(caja_dep["ymax"]) - 0.22 * alto_dep,
+                    ymax = as.numeric(caja_dep["ymax"])) +
+  scale_color_identity() +
+  scale_fill_gradientn(colours = c(color_dane_30, color_dane_claro,
+                                   color_dane_primario, color_dane_oscuro),
+                       limits = limites_idf_dep,
+                       name = "IDF\ndepartamental") +
+  labs(title = "Índice de Desempeño Fiscal (IDF) artificial por departamento, 2024",
+       subtitle = "Promedio del IDF municipal ponderado por población × valor agregado",
+       caption = "Fuente: DNP (IDF 2024), DANE (proyecciones de población, valor agregado municipal y MGN 2025). Cálculos propios.") +
+  theme_void() +
+  theme(plot.title = element_text(face = "bold", size = 13),
+        plot.subtitle = element_text(size = 10),
+        plot.caption = element_text(size = 7, hjust = 0),
+        legend.position = "right")
+
+p_mapa_idf_dep
+
+dir.create("../Resultados", showWarnings = FALSE)
+ggsave("../Resultados/mapa_idf_departamental.png",
+       plot = p_mapa_idf_dep,
+       width = 8, height = 10, dpi = 300,
+       bg = "white")
+# ==============================================================================
+# BLOQUE 6: MAPA DEL IDF MUNICIPAL
+# ==============================================================================
+
+# ---------- Verificación de llaves antes de unir ----------
+nrow(shapefile_mun)  # esperado: 1122
+class(shapefile_mun$mpio_cdpmp)  # esperado: "character"
+sum(!(idf_2024$MPIO %in% shapefile_mun$mpio_cdpmp))  # municipios con IDF sin polígono
+idf_2024$MPIO[!(idf_2024$MPIO %in% shapefile_mun$mpio_cdpmp)]  # cuáles son
+sum(!(shapefile_mun$mpio_cdpmp %in% idf_2024$MPIO))  # polígonos sin IDF (esperado: ANM y San Andrés)
+
+# ---------- Problema computacional: tamaño del shapefile ----------
+# object.size() mide cuánta memoria ocupa un objeto en R
+format(object.size(shapefile_mun), units = "MB")
+
+# ---------- Simplificación de los polígonos ----------
+# st_transform() pasa a coordenadas en metros (EPSG 9377, origen nacional, el oficial del DANE)
+# st_simplify() quita vértices: dTolerance = 500 junta puntos a menos de 500 m
+shapefile_mun_simple <- shapefile_mun %>%
+  st_transform(9377) %>%                                    # [NO VISTO EN CLASE]
+  st_simplify(dTolerance = 500, preserveTopology = TRUE)    # [NO VISTO EN CLASE]
+
+format(object.size(shapefile_mun_simple), units = "MB")
+
+# ---------- Unión del shapefile con el IDF municipal ----------
+# CUIDADO: el shapefile va primero para que el resultado siga siendo sf
+mapa_idf_mun <- shapefile_mun_simple %>%
+  left_join(idf_2024, by = c("mpio_cdpmp" = "MPIO"))
+
+nrow(mapa_idf_mun)             # esperado: 1122
+sum(is.na(mapa_idf_mun$IDF))   # polígonos sin IDF (quedan en gris)
+
+# ---------- San Andrés aparte (recuadro) ----------
+limites_idf_mun <- range(mapa_idf_mun$IDF, na.rm = TRUE)
+
+mapa_mun_continental <- mapa_idf_mun %>% filter(dpto_ccdgo != "88")
+
+# El recuadro usa el shapefile original (sin simplificar, en longitud y latitud):
+# las islas son pequeñas y no pesan, y simplificadas a 500 m perderían su forma
+mapa_mun_islas <- shapefile_mun %>%
+  filter(dpto_ccdgo == "88") %>%
+  left_join(idf_2024, by = c("mpio_cdpmp" = "MPIO"))
+
+p_recuadro_mun <- ggplot(mapa_mun_islas) +
+  geom_sf(aes(fill = IDF),
+          color = "grey40",
+          linewidth = 0.2) +
+  scale_fill_gradientn(colours = c(color_dane_30, color_dane_claro,
+                                   color_dane_primario, color_dane_oscuro),
+                       limits = limites_idf_mun,
+                       na.value = "grey80",
+                       guide = "none") +
+  coord_sf(xlim = c(-81.8, -81.3), ylim = c(12.45, 13.42), expand = FALSE) +
+  labs(title = "San Andrés y Providencia") +
+  theme_void() +
+  theme(plot.title = element_text(size = 6, hjust = 0.5),
+        plot.background = element_rect(fill = "white", color = "grey40", linewidth = 0.4))
+
+caja_mun  <- st_bbox(mapa_mun_continental)  # [NO VISTO EN CLASE]
+ancho_mun <- as.numeric(caja_mun["xmax"] - caja_mun["xmin"])
+alto_mun  <- as.numeric(caja_mun["ymax"] - caja_mun["ymin"])
+
+# ---------- Mapa ----------
+p_mapa_idf_mun <- ggplot(mapa_mun_continental) +
+  geom_sf(aes(fill = IDF),
+          color = "white",
+          linewidth = 0.05) +
+  annotation_custom(ggplotGrob(p_recuadro_mun),
+                    xmin = as.numeric(caja_mun["xmin"]),
+                    xmax = as.numeric(caja_mun["xmin"]) + 0.20 * ancho_mun,
+                    ymin = as.numeric(caja_mun["ymax"]) - 0.22 * alto_mun,
+                    ymax = as.numeric(caja_mun["ymax"])) +
+  scale_fill_gradientn(colours = c(color_dane_30, color_dane_claro,
+                                   color_dane_primario, color_dane_oscuro),
+                       limits = limites_idf_mun,
+                       na.value = "grey80",
+                       name = "IDF\nmunicipal") +
+  labs(title = "Índice de Desempeño Fiscal (IDF) por municipio, 2024",
+       subtitle = "En gris: áreas no municipalizadas y San Andrés, que no tienen IDF",
+       caption = "Fuente: DNP (IDF 2024), DANE (MGN 2025). Polígonos simplificados a 500 m, excepto el recuadro.") +
+  theme_void() +
+  theme(plot.title = element_text(face = "bold", size = 13),
+        plot.subtitle = element_text(size = 10),
+        plot.caption = element_text(size = 7, hjust = 0),
+        legend.position = "right")
+
+system.time(print(p_mapa_idf_mun))
+
+dir.create("../Resultados", showWarnings = FALSE)
+ggsave("../Resultados/mapa_idf_municipal.png",
+       plot = p_mapa_idf_mun,
+       width = 8, height = 10, dpi = 300,
+       bg = "white")
