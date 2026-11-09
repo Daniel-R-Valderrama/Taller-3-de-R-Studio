@@ -1,572 +1,855 @@
-# Taller 3 · Taller de Programación en R (2026-2)
+# Taller 3 · Datos geoespaciales, web scraping y herramientas de visualización
 
+Taller de Programación en R · Facultad de Economía, Universidad de los Andes · 2026-2
+Profesor: Santiago Neira Hernández · Profesores asistentes: Juan Pablo Rocha, Camilo Alexander Ramírez, Sergio Andrés Vasquez Jimenez
 
-Datos geoespaciales, web scraping y herramientas de visualización.
+Este README fija las reglas con las que se escribe y se audita todo el código del repositorio. Cualquier línea de código debe poder rastrearse a una clase del inventario (sección 3) o estar marcada como no vista (regla 3).
 
 ---
 
 ## 1. Contenido del taller
 
-| Ejercicio | Tema | Puntos |
-|:--|:--|:--|
-| 1 | Datos geoespaciales: IDF artificial departamental (A) y mapa municipal (B) | 1,5 |
-| 2 | Web scraping y API: IBR ON (Banco de la República) y SOFR ON (Fed de Nueva York) | 2,0 |
-| 3 | Aplicativo Shiny con tres pestañas: geoespacial, series financieras y diseño libre | 1,5 |
+### 1.1 Ejercicios
 
-### Entregables
+| Ejercicio | Literal | Tema | Puntos |
+|---|---|---|---|
+| 1. Datos geoespaciales | A | IDF departamental artificial: media ponderada del IDF municipal con ponderador población × VA, proyección del VA 2023 a 2024, mapa departamental e interpretación | 1,0 |
+| | B | Intento de mapa del IDF municipal y explicación de los problemas computacionales (bono si se resuelve y se presenta) | 0,5 |
+| 2. Web scraping y API | A | IBR overnight diaria, 01/01/2020 a 31/10/2025 (Banco de la República) | 0,7 |
+| | B | SOFR overnight diaria, 01/01/2020 a 31/10/2025 (Fed de Nueva York) | 0,7 |
+| | C | Gráfico de doble eje (SOFR izquierda, IBR derecha), frecuencia elegida y comparación de tendencias | 0,6 |
+| 3. Aplicativo Shiny | A | Pestaña 1: mapa interactivo del IDF departamental con top 3 de municipios por IDF municipal | 0,5 |
+| | B | Pestaña 2: doble eje interactivo, consulta por fecha y devaluación implícita π = (1 + i_d)/(1 + i_e) − 1 | 0,5 |
+| | C | Pestaña 3: gráfica libre en plotly con al menos un widget y texto explicativo escrito por el grupo | 0,5 |
+| **Total** | | | **5,0 + bonos** |
 
-1. Script en R, archivo RMarkdown y el documento generado.
-2. Aplicativo Shiny con tres pestañas.
-3. Base de datos del literal 3C, si aplica.
-4. Enlace o anexo de la conversación con IA (omitirlo resta una unidad).
+Bonos: mapa municipal resuelto (1B) y mejor diseño del aplicativo (3).
 
-### Archivos propuestos
+### 1.2 Entregables
 
-| Archivo | Contenido |
-|:--|:--|
-| `01_Ejercicio_1_geoespacial.R` | IDF artificial departamental y mapa municipal |
-| `02_Ejercicio_2_tasas.R` | Extracción y gráficos de IBR y SOFR |
-| `app_taller3/app.R` | Aplicativo Shiny (ejercicio 3) |
-| `Taller_3.Rmd` | Documento con resultados e interpretaciones |
-| `output/` | Gráficos, tablas y bases intermedias generadas |
+| # | Entregable | Observación |
+|---|---|---|
+| 1 | Script(s) en R | Código de tratamiento, extracción y gráficas |
+| 2 | Archivo RMarkdown y documento generado | El documento contiene gráficas, tablas, verificaciones e interpretaciones del grupo |
+| 3 | Aplicativo Shiny con tres pestañas | Datos geoespaciales, series financieras y diseño libre |
+| 4 | Base de datos del literal 3C | Solo si la gráfica libre usa datos que no están en el repositorio |
+| 5 | Enlace o anexo de la conversación con IA | Obligatorio. Omitirlo resta una unidad a la nota total |
+| 6 | Nota sobre paquetes no vistos | Indicar en la entrega cuáles se usaron y cómo se marcaron (regla 3) |
+
+### 1.3 Archivos propuestos
+
+```
+Taller 3/
+├── README.md
+├── 00_reinstalar_paquetes.R
+├── 01_datos_geoespaciales.R
+├── 02_tasas_api_scraping.R
+├── Taller3_documento.Rmd
+├── Taller3_documento.html
+├── app_shiny/
+│   ├── app.R
+│   └── datos/
+├── Bases de Datos/
+├── Resultados/
+└── anexos/
+```
+
+| Archivo o carpeta | Contenido | Lee de | Escribe en |
+|---|---|---|---|
+| `00_reinstalar_paquetes.R` | Reinstalación de paquetes en una sesión nueva de R, cuando hay errores de versiones | | |
+| `01_datos_geoespaciales.R` | Ejercicio 1: lectura, llaves, uniones, ponderadores, proyección del VA, mapas | `Bases de Datos/` | `Resultados/`, `app_shiny/datos/` |
+| `02_tasas_api_scraping.R` | Ejercicio 2: extracción por API y por scraping, registro de extracción, limpieza de fechas, gráficas | Internet | `Resultados/`, `app_shiny/datos/` |
+| `app_shiny/app.R` | Ejercicio 3: aplicativo con tres pestañas | `app_shiny/datos/` | Nada |
+| `app_shiny/datos/` | Objetos `.rds` ya procesados que usa la app, más la base del literal 3C | | |
+| `Taller3_documento.Rmd` | Documento final: resultados, verificaciones e interpretaciones del grupo | `Resultados/` | `Taller3_documento.html` |
+| `Bases de Datos/` | Shapefiles DANE y Excel de DNP y DANE tal como se descargaron | | Nunca se escribe aquí |
+| `Resultados/` | Figuras, tablas y objetos con prefijo de punto y literal (`1_A_`, `2_C_`), objetos (`.rds`), registro de extracción, descargas del scraping | | |
+| `anexos/` | Conversación con IA exportada o archivo con el enlace | | |
+
+Ruta del taller: `C:\Users\Daniel\OneDrive\Escritorio\2026-2\R\Taller 3`, con las subcarpetas `Bases de Datos` y `Resultados`.
+
+Orden de ejecución: `01_datos_geoespaciales.R` → `02_tasas_api_scraping.R` → `Taller3_documento.Rmd` → `app_shiny/app.R`.
 
 ---
 
 ## 2. Reglas de desarrollo
 
-El objetivo es que todo el código se pueda auditar con lo visto en clase.
+1. **Funciones permitidas.** Se puede usar cualquier función de base R o de un paquete del inventario (sección 3), aunque esa función puntual no se haya visto en clase. El criterio de auditoría es el paquete, no la función.
 
-1. **Herramientas permitidas.** Cualquier función que venga por defecto en R (`base`, `stats`, `utils`, `graphics`, `grDevices`) o que pertenezca a un paquete visto en clase (sección 3), aunque la función específica no se haya visto (por ejemplo `bind_rows()` o `anti_join()`).
+2. **Paquetes nuevos solo si no hay alternativa.** Antes de cargar un paquete fuera del inventario hay que intentar resolver la tarea con base R o con el inventario. Candidatos según lo que pide el enunciado:
 
-2. **Paquetes nuevos solo si no hay alternativa.** Se confirman uno por uno al llegar a cada punto. Candidatos:
-   - `sf`: lectura de shapefiles (ejercicio 1).
-   - `rvest`: web scraping (ejercicio 2).
-   - `jsonlite`: solo si la API no devuelve CSV (ejercicio 2).
+   | Paquete candidato | Para qué | Ejercicio | Alternativa con el inventario | Recomendación |
+   |---|---|---|---|---|
+   | `rvest` | Leer HTML y extraer tablas o enlaces (web scraping) | 2 | `readLines()` + `grep()` / `regmatches()` de base R, que sirven en páginas HTML estáticas y simples | Usar si la página tiene tablas o enlaces que la regex vuelve frágil. Es el candidato más probable |
+   | `jsonlite` | Convertir respuestas JSON de una API a data frame | 2 | Pedir a la API el formato CSV y leerlo con `readr::read_csv()` | Evitar si la API ofrece CSV |
+   | `httr2` (o `httr`) | Peticiones HTTP con parámetros, encabezados o manejo de errores | 2 | `readr::read_csv(url)` o `download.file()` cuando la consulta cabe en una URL | Solo si la API exige encabezados o autenticación |
+   | `readxl` | Leer Excel en formato antiguo `.xls` | 1 | `openxlsx::read.xlsx()` lee `.xlsx` pero no `.xls` | Solo si algún original llega como `.xls`. No convertir el archivo a mano (regla 5) |
+   | `rmapshaper` | Simplificar polígonos conservando la topología entre vecinos | 1B | `sf::st_simplify()` | Probar primero `st_simplify()`. Usar solo si deja huecos o solapamientos visibles |
+   | `chromote` o `RSelenium` | Páginas que cargan los datos con JavaScript | 2 | Ninguna dentro del inventario | Último recurso. Antes, revisar si la página tiene un enlace de descarga o un servicio web |
 
-3. **Marcado de paquetes no vistos.**
-   - Lista al inicio del script con cada paquete no visto y para qué se usa.
-   - Comentario `# [NO VISTO EN CLASE]` en cada línea que lo use.
-   - En la entrega se explica este sistema de marcado.
+   No hacen falta: `stringr` (sirven `gsub()`, `trimws()`, `toupper()`, `iconv()`), `janitor` (sirven `names()` y `tolower()`), `readxl` si todo es `.xlsx`.
 
-4. **Formateo de texto con base R.** `sprintf()` y `formatC()` están permitidas, por ejemplo para rellenar códigos DIVIPOLA con ceros (`05001`). Llevan un comentario corto de qué hacen.
+3. **Marcado de paquetes no vistos.** Cada script lista, en la sección CONFIGURACIÓN INICIAL DEL AMBIENTE debajo de `#otros paquetes para este punto`, los paquetes no vistos que usa (o escribe "ninguno"). Toda línea que use uno de ellos termina con `# [NO VISTO EN CLASE]`. Además, esas funciones se llaman siempre con prefijo `paquete::funcion()`, para que la auditoría se pueda hacer buscando el nombre del paquete. Este mismo sistema se describe en la nota de entrega.
 
-5. **Estructura del código.** Se sigue la plantilla de la sección 4, igual al estilo de los scripts de clase. Nunca se modifican los archivos originales. Al corregir, se entregan solo los bloques que cambian.
+4. **Formato de texto.** `sprintf()` y `formatC()` están permitidas para formatear texto (rellenar códigos DIVIPOLA con ceros, imprimir tasas con dos decimales, armar mensajes). Cada uso lleva un comentario corto que diga qué formatea.
 
-6. **Verificaciones obligatorias.**
-   - En cada unión: `nrow()` antes y después, y número de códigos sin pareja.
-   - Ponderadores: `sum(w) == 1` por departamento.
-   - Al menos un cálculo comprobado por dos caminos distintos.
-   - Una observación de cada tasa contrastada con la fuente oficial.
+5. **Organización y archivos.**
+   - Cada script empieza con el bloque fijo de la sección 4 (`# Taller 3, Punto X`, CONFIGURACIÓN INICIAL DEL AMBIENTE y DIRECTORIO DE TRABAJO). Después vienen bloques numerados (`BLOQUE 1`, `BLOQUE 2`, ...). Cada bloque hace una sola cosa y termina con su verificación.
+   - Los paquetes no se instalan desde los scripts del taller: si hay errores de versiones se corre `00_reinstalar_paquetes.R` en una sesión nueva.
+   - `setwd()` va en DIRECTORIO DE TRABAJO, con la ruta armada a partir de `Sys.getenv("USERNAME")` hasta la carpeta `Taller 3`. Excepciones: `app.R` no usa `setwd()` (Shiny ya trabaja desde la carpeta de la app) y el `.Rmd` fija la ruta con `knitr::opts_knit$set(root.dir = ...)`.
+   - Los archivos de `Bases de Datos/` nunca se modifican, ni a mano ni desde R. Todo resultado se escribe en `Resultados/` o `app_shiny/datos/`.
+   - Al corregir código se entregan solo los bloques que cambian, completos y con su número.
+   - El estilo de escritura sigue la sección 6 (patrones de los Talleres 1 y 2), para que el grupo pueda auditar el código comparándolo con lo que ya escribió.
 
-7. **Lo que no se hace con IA.** Las interpretaciones de los resultados y los textos explicativos del Shiny los escribe el grupo.
+6. **Verificaciones.** Cada paso lleva su verificación inmediatamente después. Mínimo obligatorio:
 
-8. **Funciones no vistas en clase.** Aunque estén permitidas por la regla 1, llevan un comentario corto que explique qué hacen.
+   | Verificación | Dónde | Cómo |
+   |---|---|---|
+   | Filas antes y después de cada unión | 1, 2 | `nrow()` antes y después, con `if` y `cat("Alerta: ...")` como en el Taller 2 |
+   | Llaves sin pareja | 1, 2 | `anti_join()` en ambos sentidos y conteo con `nrow()` |
+   | Llaves duplicadas | 1 | `count(llave) %>% filter(n > 1)` en cada base antes de unir |
+   | Ponderadores suman 1 por departamento | 1A | `group_by(cod_dpto) %>% summarise(sum(w))` comparado con 1 usando una tolerancia |
+   | Precios del VA y tasa de crecimiento | 1A | Registrar en comentario la base de precios del anexo; tasa con `round(tasa, 2)` antes de aplicarla |
+   | Cálculo comprobado por otro procedimiento | 1A | IDF departamental con `sum(idf * w)` contra `weighted.mean(idf, L * VA)` |
+   | Serie correcta | 2A, 2B | Confirmar que es IBR overnight y SOFR overnight, con unidad y convención de tasa documentadas |
+   | Rango de fechas | 2A, 2B | `min()` y `max()` de la fecha dentro de 01/01/2020 a 31/10/2025; número de observaciones |
+   | Registro de extracción | 2 | Fuente, serie, método, URL y fecha de consulta en `Resultados/2_registro_extraccion.xlsx` |
+   | Observación contrastada con la fuente oficial | 2A, 2B | Al menos una fecha por tasa, comparada con el valor publicado y anotada en el registro |
+   | Fechas sin observación | 2C, 3B | Conteo de `NA` por serie después de unir IBR y SOFR por fecha |
+   | Tasa faltante en la app | 3B | `validate(need(...))` con mensaje al usuario |
+
+7. **Uso de IA según el enunciado.**
+   - Se permite IA para el código y el desarrollo técnico. La conversación se enlaza o se adjunta en `anexos/`; sin eso se pierde una unidad de la nota total.
+   - No se permite IA para redactar las interpretaciones. En el código y en el `.Rmd` la IA deja el marcador `[INTERPRETACIÓN: la escribe el grupo]` y no lo llena.
+   - Quedan bajo esta regla, por ser texto de análisis: interpretación del mapa (1A), justificación de la tasa de crecimiento elegida (1A), explicación de los problemas computacionales del mapa municipal (1B), comparación de tendencias IBR y SOFR (2C) y el cuadro de texto de la gráfica libre (3C).
+   - La IA sí puede documentar en comentarios de código lo que el código hace (por ejemplo, "se toma el promedio mensual de los días con dato").
+   - La responsabilidad por la exactitud del taller es del grupo, aunque se use IA.
+
+8. **Funciones no vistas.** Una función de un paquete del inventario que no se haya visto en clase se puede usar (regla 1), pero lleva un comentario corto en la misma línea o en la anterior con el formato `# Función no vista: qué hace`.
 
 ---
 
-## 3. Inventario de lo visto en clase
+## 3. Inventario
 
-Nota: no se tienen los scripts de las Clases 5 y 10. Si se consiguen, se agregan aquí.
+Lo visto en clase es la única fuente de verdad para auditar. Faltan las Clases 5, 10 y 12; si se recuperan, se agregan aquí.
 
-### Paquetes vistos
-
-| Paquete | Clase | Uso principal |
-|:--|:--|:--|
-| `docstring` | 3 | Documentación de funciones |
-| `openxlsx` | 4, 6, 7 | Leer y escribir Excel |
-| `dplyr` | 6 | Manipulación de datos |
-| `tidyr` | 6 | Formato ancho y largo |
-| `readr` | 6 | Lectura de CSV (`read_csv`) |
-| `ggplot2` | 7, 8 | Gráficos |
-| `lubridate` | 7, 8 | Fechas |
-| `RColorBrewer` | 7 | Paletas (`display.brewer.all`) |
-| `ggthemes` | 8 | Temas prediseñados |
-| `plotly` | 8, 9 | Gráficos interactivos |
-| `gganimate`, `gifski` | 8 | Animaciones y exportación a GIF |
-| `ggrepel` | 8 | Etiquetas sin superposición |
-| `gapminder` | 8, 9 | Datos de ejemplo |
-| `scales` | 8 | Formato de ejes |
-| `htmlwidgets` | 8 | Guardar gráficos interactivos en HTML |
-| `rmarkdown`, `quarto` | 9 | Documentos reproducibles |
-| `DT` | 9 | Tablas interactivas |
-| `leaflet` | 9 | Mapas interactivos |
-| `crosstalk` | 9 | Widgets conectados |
-| `shiny`, `shinydashboard` | 9 | Aplicativos web |
-| `modelsummary` | 11 | Tablas descriptivas y de regresión |
-| `lmtest`, `sandwich` | 11 | Pruebas y errores robustos |
-| `fixest` | 11 | Efectos fijos, cluster y VI |
-| `AER` | 11 | Variables instrumentales (`ivreg`) |
-
-### Clase 1: introducción
-
-- Tipos básicos: `typeof()`, `class()`, `print()`, `NA`.
-- Vectores: `c()`, `1:10`, `seq(by = )`, asignación con `<-`.
-- Indexación: `x[1]`, `x[2:4]`, `x[c(1, 3)]`.
-- Aritmética vectorizada y conversión con `as.numeric()`.
-
-### Clase 2: estructuras de datos
-
-- Enteros (`1L`), factores (`factor(levels = , ordered = )`, `as.factor()`, `levels()`).
-- Secuencias: `seq(length.out = )`.
-- Matrices: `matrix(byrow = , dimnames = )`, `dim()`, `nrow()`, `ncol()`, `array()`.
-- Listas: `list()`, `str()`, `[ ]`, `[[ ]]`, `$`, eliminar con `NULL`.
-- Indexación negativa y lógica, `which()`, `sum()` y `mean()` sobre lógicos.
-- Familias `is.*()` y `as.*()`, `round()`, `as.integer()`.
-- Operadores: `%%`, `==`, `!=`, `&`, `|`, `!`, reciclaje, `na.rm = TRUE`.
-- Texto: `paste()`, `paste0()`.
-- Álgebra: `%*%`, `t()`, `solve()`, `crossprod()`, `tcrossprod()`.
-- Simulación: `set.seed()`, `runif()`, `rnorm()`, `rbinom()`, `rpois()`, `sample()`.
-- Ambiente: `ls()`, `rm()`.
-
-### Clase 3: flujos de control y funciones
-
-- Condicionales: `if`, `else if`, `else`, `ifelse()`.
-- Bucles: `for`, `while`.
-- Funciones: `function()`, `return()`, documentación con `#'` y `docstring()`.
-- Manejo de errores: `stop()`, `warning()`, `any()`.
-- Texto: `substr()`, `cat()`.
-
-### Clase 4: data frames
-
-- `data.frame()`, `str()`, `names()`, `head()`, `tail()`, `View()`.
-- Ordenar: `order()` (incluye varias columnas, `-`, `decreasing = c()`, `method = "radix"`).
-- Seleccionar columnas por posición o nombre: `df[, c(...)]`.
-- Faltantes: `is.na()`, `colSums()`, `colMeans()`, `complete.cases()`.
-- Nombres: `colnames()`, `rownames()`.
-- Rutas: `getwd()`, `setwd()`, `Sys.getenv()`.
-- Lectura: `read.table()`, `read.csv(sep = )`, `read.xlsx()`.
-- Familia apply: `apply(MARGIN = )`, `lapply()`, funciones propias dentro de `apply`.
-- `quantile()`, `max()`, `min()`, `data()`.
-
-### Clase 6: dplyr y tidyr
-
-- `table()`, `prop.table()`, `unique()`, `length()`.
-- Verbos: `select()`, `mutate()`, `filter()`, `arrange()`, `desc()`.
-- Recodificar: `case_when()`.
-- Agrupar: `group_by()`, `summarise()`, `n()`, `n_groups()`, `.groups = "drop"`.
-- Pipe `%>%`, `starts_with()`.
-- Formatos: `pivot_longer()`, `pivot_wider(names_prefix = )`.
-- Uniones: `left_join(by = )`.
-- Lectura y exportación: `read_csv()`, `write.csv(row.names = FALSE)`, `write.xlsx()` con varias hojas.
-
-### Clase 7: ggplot2
-
-- Carga de paquetes con `install_if_missing()` y `lapply(paquetes, library, character.only = TRUE)`.
-- `file.path()`, `distinct(.keep_all = TRUE)`, `%in%`.
-- Estructura: `ggplot(datos, aes())` + capas.
-- Geometrías: `geom_point()`, `geom_line()`, `geom_vline()`, `geom_hline()`, `geom_histogram()`, `geom_density()`, `geom_bar()`, `geom_boxplot()`, `geom_jitter()`, `geom_violin()`, `geom_count()`, `geom_smooth(method = "lm")`, `geom_text()`, `geom_label()`.
-- Estética: `color`, `fill`, `size`, `shape`, `linetype`.
-- Escalas: `scale_y_log10()`, `scale_x_continuous()`, `scale_y_continuous()`, `scale_color_brewer()`, `scale_color_distiller()`, `scale_color_gradient()`, `scale_color_discrete()`.
-- Facetas: `facet_grid()`, `facet_wrap()`.
-- Temas y textos: `theme_bw()`, `theme_minimal()`, `theme_void()`, `labs()`, `theme(element_text(), legend.position = )`.
-- Torta: `geom_bar(stat = "identity")` + `coord_polar()` + `position_stack()`.
-
-### Clase 8: visualización avanzada
-
-- Fechas: `as.Date(format = )`, `year()`, `month()`, `day()`, `week()`, `wday()`, `seq(by = "day")`.
-- Completar fechas faltantes: `expand.grid()` + `left_join()` + reemplazo de `NA` por 0.
-- `dir.create()`, `which.max()`, `range()`.
-- Temas: `theme_stata()`, `theme_excel_new()`, `theme_economist()`.
-- Interactivos: `ggplotly(tooltip = "text")`.
-- Heatmap: `geom_tile()`, `scale_fill_gradient()`, `scale_y_discrete(limits = rev)`.
-- Animaciones: `transition_reveal()`, `transition_time()`, `view_follow()`, `animate()`, `anim_save()`.
-- Anotaciones: `geom_label_repel()`, `annotate()`, `facet_wrap(scales = "free_y")`.
-- Escalas: `scale_color_viridis_d()`, `scale_size()`, `scale_color_manual()`, `label_dollar()`, `label_number()`.
-- **Doble eje:** transformación min-max + `sec_axis()` (base para el ejercicio 2C).
-- Guardado: `ggsave()`, `htmlwidgets::saveWidget()`.
-
-### Clase 9: RMarkdown, Quarto, htmlwidgets y Shiny
-
-- RMarkdown: YAML, chunks (`echo`, `include`, `eval`, `message`, `warning`, `fig.height`), código en línea, `render()`, `writeLines()`, `browseURL()`.
-- Quarto: `#|` en chunks, `embed-resources: true`, `quarto_render()`, `file.copy()`, `file.remove()`.
-- plotly nativo: `plot_ly()`, `layout()`, `hovertemplate`.
-- DT: `datatable()`, `formatStyle()`, `styleColorBar()`, `formatCurrency()`, `formatRound()`.
-- leaflet: `addProviderTiles(providers$Esri.WorldStreetMap)`, `setView()`, `addMarkers()`, `addCircleMarkers()`, `popup`, `label`.
-- crosstalk: `SharedData$new()`, `bscols()`.
-- Shiny (UI): `fluidPage()`, `titlePanel()`, `sidebarLayout()`, `sidebarPanel()`, `mainPanel()`, `tabsetPanel()`, `tabPanel()`, `h2()`, `h3()`, `p()`, `br()`, `hr()`, `tags$ul()`.
-- Shiny (inputs): `textInput()`, `numericInput()`, `selectInput()`, `sliderInput()`, `checkboxGroupInput()`, `checkboxInput()`. Mencionados: `dateInput()`, `fileInput()`, `radioButtons()`, `actionButton()` con `observeEvent()`.
-- Shiny (outputs): `textOutput()`/`renderText()`, `tableOutput()`/`renderTable()`, `plotOutput()`/`renderPlot()`, `verbatimTextOutput()`/`renderPrint()`, `plotlyOutput()`/`renderPlotly()`, `DTOutput()`/`renderDT()`.
-- Reactividad: `reactive()`.
-- shinydashboard: `dashboardPage()`, `dashboardHeader()`, `dashboardSidebar()`, `sidebarMenu()`, `menuItem()`, `dashboardBody()`, `tabItems()`, `tabItem()`, `fluidRow()`, `box()`, `valueBox()`, `icon()`.
-
-### Clase 11: econometría
-
-- Descriptivas: `datasummary_skim()`, `datasummary_balance()`, `datasummary()`, `datasummary_correlation()`, `datasummary_crosstab()`.
-- Regresión: `lm()`, `summary()`, `factor()`, `coef()`, `resid()`.
-- Supuestos: `bptest()`, `shapiro.test()`, `plot(modelo, which = )`.
-- Errores: `coeftest()`, `vcovHC()`, `vcov = c("classical", "HC1", "bootstrap")`.
-- Tablas y gráficos: `modelsummary()`, `modelplot()`, exportación a HTML y LaTeX.
-- `feols()` con efectos fijos, `vcov = "hetero"`, `cluster = ~`.
-- Interacciones (`*`) y VI con `ivreg()` y `feols()`.
-- `save()`, `read.csv(na.strings = )`.
+| Paquete | Clase(s) | Uso principal | ¿Lo usa el taller? |
+|---|---|---|---|
+| base R | 1, 2 (y todas) | Objetos, vectores, data frames, funciones, condicionales, ciclos, `paste0()`, `cat()`, `nrow()`, `saveRDS()`, `readRDS()` | Sí, en todo |
+| `docstring` | 3 | Documentar funciones propias con comentarios `#'` y consultarlas con `docstring()` | Sí, funciones auxiliares de verificación |
+| `openxlsx` | 4, 6, 7 | Leer y escribir archivos `.xlsx` | Sí, originales DNP/DANE y registro de extracción |
+| `dplyr` | 6, 7, 8 | Manipulación de datos: `filter()`, `mutate()`, `group_by()`, `summarise()`, uniones `*_join()` | Sí, en todo |
+| `tidyr` | 6 | Reestructurar datos (`pivot_longer()`, `pivot_wider()`), `fill()`, `drop_na()` | Sí, anexos DANE en formato ancho y series |
+| `readr` | 6 | Leer y escribir texto plano (`read_csv()`, `write_csv()`) | Sí, API de SOFR en CSV |
+| `ggplot2` | 7, 8, 13 | Gráficas estáticas y mapas con `geom_sf()` | Sí, ejercicios 1 y 2 |
+| `lubridate` | 7, 8 | Fechas: `ymd()`, `floor_date()`, `year()`, `month()` | Sí, ejercicio 2 |
+| `RColorBrewer` | 7 | Paletas de color secuenciales y cualitativas | Sí, mapas |
+| `ggthemes` | 8 | Temas predefinidos para ggplot2 | Opcional |
+| `plotly` | 8, 9 | Gráficas interactivas (`ggplotly()`, `plot_ly()`) | Sí, 3B y 3C (obligatorio en 3C) |
+| `gganimate` | 8 | Animación de gráficas ggplot2 | No |
+| `gifski` | 8 | Exportar animaciones a GIF | No |
+| `ggrepel` | 8, 13 | Etiquetas que no se superponen, también sobre mapas | Sí, nombres de departamentos |
+| `gapminder` | 8, 9 | Base de datos de ejemplo | Opcional en 3C |
+| `scales` | 8 | Formato de ejes y etiquetas (porcentajes, separadores) | Sí, ejes de tasas |
+| `htmlwidgets` | 8 | Guardar widgets interactivos como HTML (`saveWidget()`) | Sí, exportar mapas y plotly |
+| `rmarkdown` | 9 | Generar el documento desde el `.Rmd` | Sí |
+| `knitr` | 9 | Opciones de chunks, `kable()` para tablas | Sí |
+| `quarto` | 9 | Documentos Quarto | No (se usa RMarkdown) |
+| `DT` | 9 | Tablas interactivas | Sí, top 3 de municipios en 3A |
+| `leaflet` | 9, 13 | Mapas interactivos | Sí, 3A |
+| `crosstalk` | 9 | Filtros compartidos entre widgets sin servidor | Opcional en 3C |
+| `shiny` | 9 | Aplicativos interactivos | Sí, ejercicio 3 |
+| `shinydashboard` | 9 | Estructura de tablero con pestañas | Sí, ejercicio 3 |
+| `modelsummary` | 11 | Tablas de regresión | No |
+| `lmtest` | 11 | Pruebas sobre modelos lineales | No |
+| `sandwich` | 11 | Errores estándar robustos | No |
+| `fixest` | 11 | Regresiones con efectos fijos | No |
+| `AER` | 11 | Datos y modelos de econometría aplicada | No |
+| `estimatr` | 11 | Se cargó en clase pero no se usó | No. No cuenta como visto |
+| `sf` | 13 | Leer shapefiles, transformar proyecciones, uniones y simplificación de geometrías | Sí, ejercicio 1 y 3A |
+| `BAMMtools` | 13 | Cortes naturales de Jenks (`getJenksBreaks()`) para clasificar valores en mapas | Sí, escala de colores del mapa |
 
 ---
 
 ## 4. Plantilla de estructura del código
 
-Todos los scripts siguen el formato de los scripts de clase:
+Todo script de un punto empieza con este bloque fijo, sin cambios salvo el número del punto, los paquetes y la lista de no vistos. Después siguen los bloques numerados.
 
 ```r
-# =============================================================================
-# TALLER 3 - EJERCICIO X: TÍTULO
-# =============================================================================
-# Integrantes: ...
-# Objetivos:
-# - ...
-# - ...
-#
-# PAQUETES NO VISTOS EN CLASE
-# - sf: lectura de shapefiles  -> líneas marcadas con # [NO VISTO EN CLASE]
-#
-# FUENTES
-# - Fuente, serie, método de extracción y fecha de consulta
-# =============================================================================
+# Taller 3, Punto X
+cat("\014")
+rm(list = ls())
+# ==============================================================================
+# CONFIGURACIÓN INICIAL DEL AMBIENTE
+# ==============================================================================
+
+# Si es la primera vez o tienen errores de versiones, NO instalen desde aquí:
+# corran primero el script 00_reinstalar_paquetes.R en una sesión nueva de R.
+# CUIDADO: instalar un paquete que ya está cargado deja la instalación a medias.
+
+library(sf)          # datos geoespaciales (shapefiles, proyecciones, geometrías)
+library(dplyr)       # manipulación de datos
+library(ggplot2)     # visualización (geom_sf dibuja mapas)
+library(ggrepel)     # etiquetas que no se solapan
+library(BAMMtools)   # getJenksBreaks(): clasificación por cortes naturales
+library(leaflet)     # mapas interactivos
+
+#otros paquetes para este punto
+library(openxlsx)      # lectura de los Excel de DNP y DANE
+library(RColorBrewer)  # paletas de color para el mapa
+
+# Paquetes no vistos en clase: ninguno
+#   (si hay alguno: nombre y para qué se usa; cada línea que lo use
+#    termina en # [NO VISTO EN CLASE])
+
+# ==============================================================================
+# DIRECTORIO DE TRABAJO
+# ==============================================================================
+
+username <- Sys.getenv("USERNAME")     # usuario del sistema
+
+
+# ajustarla a la ubicación de SU carpeta "Taller 3".
+ruta_taller <- paste0("C:/Users/", username,
+                      "/OneDrive/Escritorio/2026-2/R/Taller 3")
+
+#Configuración MacOs
+#username <- Sys.getenv("USER")
+#ruta_taller <- paste0("/Users/", username, "/Taller 3")
+
+setwd(ruta_taller)
+
+# CUIDADO: "Bases de Datos" es solo lectura. Nada se escribe ahí.
+ruta_bases      <- file.path(ruta_taller, "Bases de Datos")
+ruta_resultados <- file.path(ruta_taller, "Resultados")
+dir.create(ruta_resultados, showWarnings = FALSE)
+
+# Verificación Programática 1: las carpetas existen
+if (dir.exists(ruta_bases) & dir.exists(ruta_resultados)) {
+  cat("Verificación exitosa: carpetas encontradas en", getwd(), "\n")
+} else {
+  cat("Alerta: revise la ruta del taller\n")
+}
 
 
 # =============================================================================
-# BLOQUE 1: CONFIGURACIÓN INICIAL DEL AMBIENTE
+# BLOQUE 1. CARGA DE DATOS ORIGINALES
 # =============================================================================
 
-library(dplyr)
-library(ggplot2)
+# ---------- IDF municipal (DNP) ----------
+idf_raw <- read.xlsx(file.path(ruta_bases, "nombre_archivo_idf.xlsx"),
+                     sheet = 1, startRow = 1)
 
-
-# =============================================================================
-# BLOQUE 2: DIRECTORIO DE TRABAJO Y CARGA DE DATOS
-# =============================================================================
-
-username <- Sys.getenv("USERNAME")
-
-# CUIDADO: cada integrante ajusta la ruta a su computador
-ruta_datos <- paste0("C:/Users/", username, "/...")
-setwd(ruta_datos)
-
-dir.create("output", showWarnings = FALSE)
+# Verificación
+dim(idf_raw)
+names(idf_raw)
+head(idf_raw)
 
 
 # =============================================================================
-# BLOQUE 3: TEMA DEL BLOQUE
+# BLOQUE 2. LIMPIEZA Y LLAVES
 # =============================================================================
 
-# ---------- Subtema ----------
-# Comentario que explica qué se hace y por qué
-objeto <- datos %>%
-  filter(...) %>%
-  mutate(...)
+# ... cada subtema con su verificación justo después ...
 
-# Verificación inmediata del paso anterior
-nrow(objeto)
 
-# CUIDADO: advertencia sobre un error común o una decisión importante
+# =============================================================================
+# BLOQUE N. EXPORTAR RESULTADOS
+# =============================================================================
+
+saveRDS(objeto, file.path(ruta_resultados, "objeto.rds"))
+saveRDS(objeto, "app_shiny/datos/objeto.rds")
+
+# Verificación
+file.exists(file.path(ruta_resultados, "objeto.rds"))
+
+# [INTERPRETACIÓN: la escribe el grupo en el .Rmd]
 ```
 
 ### Convenciones
 
-| Elemento | Convención |
-|:--|:--|
-| Títulos de bloque | `# ===` + `# BLOQUE N: TÍTULO EN MAYÚSCULAS` + `# ===` |
-| Subtemas | `# ---------- Subtema ----------` |
-| Advertencias | `# CUIDADO: ...` (mismo estilo del profesor) |
-| Nombres de objetos | `snake_case` en español: `idf_municipal`, `pob_2024` |
-| Comentarios | En español, explican el porqué, no solo el qué |
-| Pipes | `%>%`, un verbo por línea |
-| Verificaciones | Justo después del paso que verifican |
-| Funciones no vistas | Comentario al lado: `# formatC(): rellena con ceros` |
-| Paquetes no vistos | `# [NO VISTO EN CLASE]` en cada línea que los use |
-| Exportaciones | Siempre a la carpeta `output/` |
+| Elemento | Convención | Ejemplo |
+|---|---|---|
+| Nombres de scripts | Número de ejercicio + tema, minúsculas y guion bajo | `01_datos_geoespaciales.R` |
+| Inicio del script | `# Taller 3, Punto X`, `cat("\014")`, `rm(list = ls())`, CONFIGURACIÓN INICIAL DEL AMBIENTE y DIRECTORIO DE TRABAJO | Ver plantilla |
+| Paquetes | Un `library()` por línea con comentario de para qué sirve; los del punto debajo de `#otros paquetes para este punto` | `library(sf)          # datos geoespaciales` |
+| Rutas | `ruta_taller` con `setwd()`; `ruta_bases` y `ruta_resultados` con `file.path()`, como en el Taller 2 | `read.xlsx(file.path(ruta_bases, "archivo.xlsx"))` |
+| Secciones | `# ====` arriba y abajo, `BLOQUE N.` y título en MAYÚSCULAS | `# BLOQUE 3. UNIÓN DE BASES` |
+| Subtemas | `# ---------- Subtema ----------` | `# ---------- Llaves DIVIPOLA ----------` |
+| Avisos | `# CUIDADO: ...` | `# CUIDADO: el shapefile debe ir a la izquierda del join` |
+| Paquete no visto | `paquete::funcion()` y `# [NO VISTO EN CLASE]` al final de la línea | `rvest::read_html(url) # [NO VISTO EN CLASE]` |
+| Función no vista de paquete visto | `# Función no vista: qué hace` | `# Función no vista: st_simplify reduce vértices` |
+| Uso de `sprintf()` / `formatC()` | Comentario que diga qué formatea | `# formatC: código municipal a 5 dígitos` |
+| Pipe | `%>%` | |
+| Comentarios | En español | |
+| Objetos | Minúsculas con guion bajo; sufijo `_raw` para datos recién leídos | `idf_raw`, `idf_mun`, `shp_dpto` |
+| Llaves | Siempre texto, con ceros a la izquierda | `cod_dpto` (2 caracteres), `cod_mpio` (5 caracteres) |
+| Fechas | Clase `Date` | `fecha` |
+| Tasas | Sufijo de unidad en el nombre | `ibr_pct`, `ibr_dec`, `sofr_pct` |
+| Salidas | Número de punto y literal al inicio, como en el Taller 2 (`2_2_tasas_sexo.png`) | `Resultados/1_A_mapa_idf_dpto.png`, `Resultados/1_A_idf_dpto.xlsx` |
+| Interpretaciones | Marcador sin llenar | `[INTERPRETACIÓN: la escribe el grupo]` |
 
 ---
 
 ## 5. Patrones de código por tipo de tarea
 
-Copiados de la forma en que se escribió en clase. Cuando haya que programar algo de este tipo, se parte de estos moldes y solo se cambian nombres de bases y variables.
+Cada molde indica la clase de la que sale. Los nombres de archivos, hojas y columnas son de ejemplo: se ajustan después de inspeccionar cada original con `names()` y `head()`.
 
-### 5.1 Edición de bases de datos (Clase 6, EDA con dplyr)
-
-En clase se vieron dos estilos: una función por línea (`df <- mutate(df, ...)`) y con pipe. **En el taller se usa el pipe**, que es el estilo del final de la Clase 6 y de las Clases 7 a 11.
+### 5.1 Función auxiliar documentada para verificar uniones (Clases 2, 3 y 6)
 
 ```r
-# ---------- Carga y vistazo rápido ----------
-datos <- read.xlsx("archivo.xlsx", sheet = 1)       # o read_csv("archivo.csv")
-str(datos)
-cat("Dimensiones de la base de datos:", dim(datos), "\n")
+# ---------- Función de verificación de uniones ----------
+verificar_union <- function(x, y, llave) {
+  #' Verificar llaves antes de una unión
+  #'
+  #' Cuenta duplicados y llaves sin pareja en ambos sentidos.
+  #'
+  #' @param x data frame de la izquierda
+  #' @param y data frame de la derecha
+  #' @param llave nombre de la columna llave (texto)
+  #' @return lista con duplicados y llaves sin pareja
+  dup_x <- x %>% count(.data[[llave]]) %>% filter(n > 1)
+  dup_y <- y %>% count(.data[[llave]]) %>% filter(n > 1)
+  solo_x <- x %>% anti_join(y, by = llave)
+  solo_y <- y %>% anti_join(x, by = llave)
+  cat("Duplicados en x:", nrow(dup_x), "| Duplicados en y:", nrow(dup_y), "\n")
+  cat("Sin pareja en y:", nrow(solo_x), "| Sin pareja en x:", nrow(solo_y), "\n")
+  return(list(dup_x = dup_x, dup_y = dup_y, solo_x = solo_x, solo_y = solo_y))
+}
 
-# ---------- Cobertura y tabla de frecuencias ----------
-unique(datos$DEPARTAMENTO)
-length(unique(datos$COD_MPIO))
+library(docstring)
+docstring(verificar_union)
+```
 
-tabla_dptos <- table(datos$DEPARTAMENTO)
-freq_dptos <- data.frame(
-  DEPARTAMENTO = names(tabla_dptos),
-  FRECUENCIA   = as.numeric(tabla_dptos),
-  PORCENTAJE   = round(as.numeric(prop.table(tabla_dptos)) * 100, 2)
+### 5.2 Lectura de originales en Excel sin modificarlos (Clase 4)
+
+```r
+# ---------- Población municipal 2024 (DANE) ----------
+# CUIDADO: los anexos del DANE traen filas de títulos arriba de la tabla.
+# Se saltan con startRow; el archivo original no se toca.
+pob_raw <- read.xlsx(file.path(ruta_bases, "proyecciones_poblacion_municipal.xlsx"),
+                     sheet = 1, startRow = 9)
+
+# Verificación
+dim(pob_raw)
+names(pob_raw)
+tail(pob_raw)   # revisar notas al pie que hay que quitar
+```
+
+### 5.3 Llaves DIVIPOLA y filtros de filas que no son municipios (Clase 6 + regla 4)
+
+```r
+# ---------- Llaves DIVIPOLA ----------
+pob_mun <- pob_raw %>%
+  rename(cod_mpio = COD_MPIO, anio = AÑO, poblacion = Total) %>%
+  filter(anio == 2024) %>%
+  mutate(cod_mpio = formatC(as.integer(cod_mpio), width = 5, flag = "0"),  # formatC: código municipal a 5 dígitos
+         cod_dpto = substr(cod_mpio, 1, 2)) %>%
+  select(cod_dpto, cod_mpio, poblacion)
+
+# Verificación
+table(nchar(pob_mun$cod_mpio))           # todos deben tener 5
+pob_mun %>% count(cod_mpio) %>% filter(n > 1)
+n_distinct(pob_mun$cod_dpto)             # 33 incluyendo Bogotá
+
+# CUIDADO: si el código viene con área (total, cabecera, centro poblado),
+# filtrar el total antes de unir para no duplicar municipios.
+```
+
+Para nombres con tildes, si hiciera falta compararlos: `toupper(iconv(x, to = "ASCII//TRANSLIT"))` de base R.
+
+### 5.4 Unión con verificación de filas y llaves (Clase 6)
+
+```r
+# ---------- Unión IDF + población ----------
+chequeo <- verificar_union(idf_mun, pob_mun, "cod_mpio")
+chequeo$solo_x            # municipios con IDF sin población: revisar uno por uno
+
+n_antes <- nrow(idf_mun)
+base_mun <- idf_mun %>%
+  left_join(pob_mun %>% select(-cod_dpto), by = "cod_mpio")
+n_despues <- nrow(base_mun)
+
+# Verificación Programática 2: el pegue no aumenta las filas de la base
+if (n_despues != n_antes) {
+  cat("Alerta: el pegue multiplicó filas (", n_antes, "->", n_despues, ")\n")
+} else {
+  cat("Verificación exitosa: el pegue conserva", n_despues, "filas\n")
+}
+sum(is.na(base_mun$poblacion))
+```
+
+Evidencia para la entrega: guardar `chequeo` y los conteos en `Resultados/1_A_verificacion_uniones.xlsx` con `write.xlsx()`.
+
+### 5.5 Proyección del VA, ponderadores e IDF departamental (Clase 6 + base R)
+
+```r
+# ---------- Proyección del VA 2023 a 2024 ----------
+# Precios del VA según el anexo: [anotar aquí lo que dice el archivo]
+tasa_pib_2024 <- round(X.XX, 2)          # tasa porcentual elegida por el grupo
+# [INTERPRETACIÓN: la justificación de la tasa la escribe el grupo]
+
+base_mun <- base_mun %>%
+  mutate(va_2024 = va_2023 * (1 + tasa_pib_2024 / 100))
+
+# ---------- Ponderadores ----------
+base_mun <- base_mun %>%
+  filter(!is.na(idf), !is.na(poblacion), !is.na(va_2024)) %>%
+  group_by(cod_dpto) %>%
+  mutate(w = (poblacion * va_2024) / sum(poblacion * va_2024)) %>%
+  ungroup()
+
+# Verificación Programática 3: ponderadores suman 1 por departamento
+suma_w <- base_mun %>% group_by(cod_dpto) %>% summarise(suma = sum(w), .groups = "drop")
+if (all(abs(suma_w$suma - 1) < 1e-6)) {
+  cat("Verificación exitosa: los ponderadores suman 1 en los", nrow(suma_w), "departamentos\n")
+} else {
+  warning("Hay departamentos cuyos ponderadores no suman 1")
+}
+
+# ---------- IDF departamental ----------
+idf_dpto <- base_mun %>%
+  group_by(cod_dpto) %>%
+  summarise(idf_dpto = sum(idf * w),
+            idf_dpto_chequeo = weighted.mean(idf, poblacion * va_2024),
+            n_mpios = n(), .groups = "drop")
+
+# Verificación Programática 4: cálculo comprobado por otro procedimiento
+if (all(abs(idf_dpto$idf_dpto - idf_dpto$idf_dpto_chequeo) < 1e-6)) {
+  cat("Verificación exitosa: sum(idf * w) coincide con weighted.mean()\n")
+} else {
+  cat("Alerta: los dos cálculos del IDF departamental no coinciden\n")
+}
+summary(idf_dpto$idf_dpto)
+```
+
+### 5.6 Shapefile y mapa coroplético con cortes de Jenks (Clases 7 y 13)
+
+```r
+# ---------- Shapefile departamental ----------
+shp_dpto <- st_read(file.path(ruta_bases, "shp_departamentos/archivo.shp"))
+names(shp_dpto)
+st_crs(shp_dpto)
+
+# CUIDADO: el objeto sf va a la izquierda del join para conservar la geometría.
+n_antes <- nrow(shp_dpto)
+mapa_dpto <- shp_dpto %>%
+  mutate(cod_dpto = as.character(DPTO_CCDGO)) %>%
+  left_join(idf_dpto, by = "cod_dpto")
+if (nrow(mapa_dpto) != n_antes) cat("Alerta: el pegue con el shapefile cambió el número de filas\n")
+sum(is.na(mapa_dpto$idf_dpto))
+class(mapa_dpto)                         # debe seguir siendo "sf"
+
+# ---------- Clases con cortes naturales ----------
+cortes <- getJenksBreaks(mapa_dpto$idf_dpto, k = 6)
+mapa_dpto <- mapa_dpto %>%
+  mutate(idf_clase = cut(idf_dpto, breaks = cortes, include.lowest = TRUE))
+table(mapa_dpto$idf_clase, useNA = "ifany")
+
+# ---------- Mapa ----------
+fig_mapa <- ggplot(mapa_dpto) +
+  geom_sf(aes(fill = idf_clase), color = "white", linewidth = 0.2) +
+  geom_text_repel(aes(geometry = geometry, label = nombre_dpto),
+                  stat = "sf_coordinates", size = 2.5) +
+  scale_fill_brewer(palette = "YlGnBu", name = "IDF departamental",
+                    na.value = "grey80") +
+  labs(title = "Índice de Desempeño Fiscal artificial por departamento, 2024",
+       subtitle = "Media ponderada del IDF municipal (ponderador: población × VA)",
+       caption = "Fuente: DNP, DANE. Cálculos propios.") +
+  theme_void()
+
+ggsave(filename = file.path(ruta_resultados, "1_A_mapa_idf_dpto.png"),
+       plot = fig_mapa, width = 8, height = 9, units = "in", dpi = 300)
+```
+
+### 5.7 Mapa municipal: diagnóstico y simplificación (Clase 13)
+
+```r
+# ---------- Diagnóstico ----------
+shp_mpio <- st_read(file.path(ruta_bases, "shp_municipios/archivo.shp"))
+nrow(shp_mpio)
+print(object.size(shp_mpio), units = "Mb")
+sum(!st_is_valid(shp_mpio))              # geometrías inválidas
+
+system.time(print(ggplot(shp_mpio) + geom_sf()))   # tiempo de dibujo original
+
+# ---------- Corrección y simplificación ----------
+shp_mpio_simple <- shp_mpio %>%
+  st_make_valid() %>%                    # Función no vista: corrige geometrías inválidas
+  st_transform(3116) %>%                 # proyección en metros para que dTolerance esté en metros
+  st_simplify(preserveTopology = TRUE, dTolerance = 500)   # Función no vista: reduce vértices
+
+# Verificación
+print(object.size(shp_mpio_simple), units = "Mb")
+system.time(print(ggplot(shp_mpio_simple) + geom_sf()))
+```
+
+Los tiempos y tamaños medidos sirven de insumo; la explicación de los problemas la escribe el grupo. El EPSG 3116 (MAGNA-SIRGAS Bogotá) es una opción a confirmar.
+
+### 5.8 SOFR por API en formato CSV (Clase 6)
+
+```r
+# ---------- Extracción SOFR: API de Markets Data (Fed de Nueva York) ----------
+# CUIDADO: confirmar la ruta exacta y los parámetros en la documentación de la API.
+url_sofr <- paste0("https://markets.newyorkfed.org/api/rates/secured/sofr/search.csv",
+                   "?startDate=2020-01-01&endDate=2025-10-31")
+fecha_consulta_sofr <- Sys.time()
+sofr_raw <- read_csv(url_sofr)
+
+# Verificación
+dim(sofr_raw)
+names(sofr_raw)
+head(sofr_raw)
+```
+
+Con esto la API se consume sin paquetes nuevos. Si solo hubiera JSON, el candidato es `jsonlite` (regla 2).
+
+### 5.9 IBR por web scraping (paquete no visto)
+
+```r
+# ---------- Extracción IBR: web scraping (Banco de la República) ----------
+# Paquetes no vistos: rvest (lectura de HTML)
+url_ibr <- "URL_DE_LA_PAGINA_DEL_IBR"   # anotar la página oficial usada
+fecha_consulta_ibr <- Sys.time()
+
+pagina_ibr <- rvest::read_html(url_ibr)                                  # [NO VISTO EN CLASE]
+enlaces <- pagina_ibr %>% rvest::html_elements("a") %>% rvest::html_attr("href")   # [NO VISTO EN CLASE]
+enlaces[grepl("ibr", enlaces, ignore.case = TRUE)]
+
+# Si la página trae la tabla en HTML:
+tablas <- pagina_ibr %>% rvest::html_table()                             # [NO VISTO EN CLASE]
+
+# Si trae un enlace de descarga a Excel:
+download.file(url_archivo_ibr, file.path(ruta_resultados, "2_A_ibr_descarga.xlsx"), mode = "wb")
+ibr_raw <- read.xlsx(file.path(ruta_resultados, "2_A_ibr_descarga.xlsx"))
+
+# Verificación
+dim(ibr_raw)
+names(ibr_raw)
+```
+
+Alternativa sin paquetes nuevos para páginas HTML simples:
+
+```r
+html <- readLines(url_ibr, warn = FALSE, encoding = "UTF-8")
+enlaces <- regmatches(html, regexpr('href="[^"]+"', html))
+```
+
+CUIDADO: el archivo descargado va a `Resultados/` porque es un resultado de la extracción, no un original entregado por el enunciado.
+
+### 5.10 Registro de extracción (Clases 4 y 6)
+
+```r
+# ---------- Registro de extracción ----------
+registro <- data.frame(
+  fuente         = c("Banco de la República", "Federal Reserve Bank of New York"),
+  serie          = c("IBR overnight", "SOFR overnight"),
+  metodo         = c("Web scraping", "API"),
+  url            = c(url_ibr, url_sofr),
+  fecha_consulta = format(c(fecha_consulta_ibr, fecha_consulta_sofr), "%Y-%m-%d %H:%M"),
+  unidad         = c("[completar]", "[completar]"),
+  convencion     = c("[completar]", "[completar]"),
+  n_obs          = c(nrow(ibr), nrow(sofr)),
+  fecha_min      = c(min(ibr$fecha), min(sofr$fecha)),
+  fecha_max      = c(max(ibr$fecha), max(sofr$fecha)),
+  fecha_contraste       = c("[fecha]", "[fecha]"),
+  valor_extraido        = c(NA, NA),
+  valor_fuente_oficial  = c(NA, NA),
+  correccion            = c("[describir o 'ninguna']", "[describir o 'ninguna']")
 )
-head(arrange(freq_dptos, desc(FRECUENCIA)), 10)
 
-# ---------- Valores faltantes ----------
-colSums(is.na(datos))
-datos <- datos %>% filter(!is.na(COD_MPIO))
+write.xlsx(registro, file.path(ruta_resultados, "2_registro_extraccion.xlsx"))
 
-# ---------- Seleccionar, crear y recodificar variables ----------
-datos_limpios <- datos %>%
-  select(COD_DPTO, COD_MPIO, MUNICIPIO, IDF) %>%
-  mutate(COD_MPIO = formatC(COD_MPIO, width = 5, flag = "0"),   # formatC(): rellena con ceros
-         RANGO    = case_when(
-           IDF >= 80 ~ "Rango alto",
-           IDF >= 60 ~ "Rango medio",
-           TRUE      ~ "Rango bajo"))
-
-# ---------- Filtrar y reportar ----------
-datos_filtro <- datos_limpios %>% filter(IDF > 70)
-cat("Municipios con IDF mayor a 70:", nrow(datos_filtro), "\n")
-
-# ---------- Agrupar y resumir ----------
-resumen_dpto <- datos_limpios %>%
-  group_by(COD_DPTO) %>%
-  summarise(
-    TOTAL_MPIOS   = n(),
-    PROMEDIO_IDF  = round(mean(IDF, na.rm = TRUE), 2),
-    .groups = "drop"
-  ) %>%
-  arrange(desc(PROMEDIO_IDF))
-
-head(resumen_dpto, 10)
-
-# ---------- Unir bases (con verificación) ----------
-# Tabla de nombres única por código (patrón de la Clase 7)
-pegue <- datos %>%
-  arrange(COD_DPTO) %>%
-  distinct(COD_DPTO, .keep_all = TRUE) %>%
-  select(COD_DPTO, DEPARTAMENTO)
-
-nrow(resumen_dpto)                                   # antes
-resumen_dpto <- left_join(resumen_dpto, pegue, by = "COD_DPTO")
-nrow(resumen_dpto)                                   # después: debe ser igual
-sum(!(resumen_dpto$COD_DPTO %in% pegue$COD_DPTO))    # códigos sin pareja
-
-# ---------- Ancho a largo y largo a ancho ----------
-datos_long <- datos %>%
-  pivot_longer(cols = starts_with("VAR_"), names_to = "VARIABLE", values_to = "VALOR")
-
-datos_wide <- datos_long %>%
-  pivot_wider(names_from = VARIABLE, values_from = VALOR)
-
-# ---------- Exportar ----------
-write.csv(resumen_dpto, "output/resumen_dpto.csv", row.names = FALSE)
-write.xlsx(list("Resumen" = resumen_dpto, "Detalle" = datos_limpios),
-           "output/resultados.xlsx")
+# Verificación
+registro
 ```
 
-### 5.2 Gráficas estáticas (Clases 7 y 8)
-
-Patrón de la Clase 8: primero un gráfico básico con `labs()` completo, luego se le suma el tema personalizado. Todo gráfico del taller debe llevar **título, período, unidades, leyenda y fuente**.
+### 5.11 Fechas, filtro de rango y unión de series (Clases 6 y 7)
 
 ```r
-# ---------- Gráfico base ----------
-p_basico <- ggplot(datos, aes(x = FECHA, y = VALOR, color = SERIE)) +
-  geom_line() +
-  labs(title    = "Título del gráfico",
-       subtitle = "Período (enero 2020 - octubre 2025)",
-       x        = "Fecha",
-       y        = "Unidad (% efectivo anual)",
-       color    = "Serie",
-       caption  = "Fuente: ...")
+# ---------- Limpieza de fechas y tasas ----------
+sofr <- sofr_raw %>%
+  rename(fecha = `Effective Date`, sofr_pct = `Rate (%)`) %>%
+  mutate(fecha = mdy(fecha)) %>%
+  filter(fecha >= ymd("2020-01-01"), fecha <= ymd("2025-10-31")) %>%
+  select(fecha, sofr_pct) %>%
+  arrange(fecha)
 
-# ---------- Tema personalizado ----------
-p_custom <- p_basico +
+# Verificación
+range(sofr$fecha)
+nrow(sofr)
+sum(duplicated(sofr$fecha))
+summary(sofr$sofr_pct)
+
+# ---------- Unión por fecha ----------
+# CUIDADO: los festivos de Colombia y Estados Unidos no coinciden.
+tasas <- full_join(ibr, sofr, by = "fecha") %>% arrange(fecha)
+
+# Verificación
+nrow(ibr); nrow(sofr); nrow(tasas)
+colSums(is.na(tasas))                    # fechas sin observación por serie
+
+# ---------- Agregación (frecuencia elegida por el grupo) ----------
+tasas_mes <- tasas %>%
+  mutate(mes = floor_date(fecha, "month")) %>%
+  group_by(mes) %>%
+  summarise(ibr_pct = mean(ibr_pct, na.rm = TRUE),
+            sofr_pct = mean(sofr_pct, na.rm = TRUE),
+            dias_ibr = sum(!is.na(ibr_pct)),
+            dias_sofr = sum(!is.na(sofr_pct)))
+
+# Verificación
+nrow(tasas_mes)                          # 70 meses entre ene-2020 y oct-2025
+summary(tasas_mes$dias_ibr)
+```
+
+Si en la app se quiere rellenar con el último dato disponible: `tidyr::fill(ibr_pct, .direction = "down")` (Clase 6). La decisión y su explicación quedan en el documento.
+
+### 5.12 Gráfico de doble eje estático (Clases 7 y 8)
+
+```r
+# ---------- Doble eje: SOFR izquierda, IBR derecha ----------
+factor_eje <- max(tasas_mes$ibr_pct, na.rm = TRUE) / max(tasas_mes$sofr_pct, na.rm = TRUE)
+
+fig_doble <- ggplot(tasas_mes, aes(x = mes)) +
+  geom_line(aes(y = sofr_pct, color = "SOFR ON")) +
+  geom_line(aes(y = ibr_pct / factor_eje, color = "IBR ON")) +
+  scale_y_continuous(name = "SOFR (% anual)",
+                     sec.axis = sec_axis(~ . * factor_eje, name = "IBR (% anual)")) +
+  scale_x_date(date_breaks = "6 months", date_labels = "%b-%Y") +
+  scale_color_brewer(palette = "Set1", name = NULL) +
+  labs(title = "IBR overnight y SOFR overnight",
+       subtitle = "Promedio mensual, enero 2020 a octubre 2025",
+       x = NULL,
+       caption = "Fuente: Banco de la República; Federal Reserve Bank of New York.") +
   theme_minimal() +
-  theme(plot.title       = element_text(size = 14, face = "bold"),
-        plot.subtitle    = element_text(size = 12, color = "gray50"),
-        legend.position  = "bottom",
-        panel.grid.minor = element_blank())
+  theme(legend.position = "bottom")
 
-p_custom
+ggsave(filename = file.path(ruta_resultados, "2_C_doble_eje.png"),
+       plot = fig_doble, width = 9, height = 5, units = "in", dpi = 300)
 
-# ---------- Guardar ----------
-ggsave(filename = "output/nombre_grafico.png", plot = p_custom,
-       width = 10, height = 6, units = "in", dpi = 300)
+# Verificación Programática: el factor de escala es válido
+if (!is.finite(factor_eje) | factor_eje <= 0) cat("Alerta: revise el factor de escala del doble eje\n")
 ```
 
-**Series de tiempo con fechas faltantes** (Clase 8):
+### 5.13 Doble eje interactivo en plotly (Clases 8 y 9)
 
 ```r
-# Paso 1: texto a fecha
-datos$FECHA <- as.Date(datos$FECHA, format = "%d/%m/%Y")
+# ---------- Doble eje interactivo ----------
+fig_doble_int <- plot_ly(tasas) %>%
+  add_lines(x = ~fecha, y = ~sofr_pct, name = "SOFR ON (% anual)") %>%
+  add_lines(x = ~fecha, y = ~ibr_pct, name = "IBR ON (% anual)", yaxis = "y2") %>%
+  layout(title = "IBR overnight y SOFR overnight, 2020-2025",
+         yaxis  = list(title = "SOFR (% anual)"),
+         yaxis2 = list(title = "IBR (% anual)", overlaying = "y", side = "right"),
+         xaxis  = list(title = ""),
+         legend = list(orientation = "h"))
 
-# Paso 2: secuencia con TODOS los días del período
-fechas <- seq(as.Date("2020-01-01"), as.Date("2025-10-31"), by = "day")
-
-# Paso 3: pegar los datos observados
-df_full     <- data.frame(FECHA = fechas)
-df_complete <- left_join(df_full, datos, by = "FECHA")
-
-nrow(df_full) == nrow(df_complete)   # el join no debe duplicar filas
-sum(is.na(df_complete$VALOR))        # días sin observación
-# CUIDADO: en tasas, un día sin dato NO es cero. Se deja NA y se explica.
-```
-
-**Gráfico de doble eje** (Clase 8, transformación min-max):
-
-```r
-# Eje izquierdo = var_izq ; eje derecho = var_der (se reescala)
-min_izq   <- min(datos$var_izq, na.rm = TRUE)
-min_der   <- min(datos$var_der, na.rm = TRUE)
-pendiente <- (max(datos$var_izq, na.rm = TRUE) - min_izq) /
-             (max(datos$var_der, na.rm = TRUE) - min_der)
-
-datos <- datos %>%
-  mutate(var_der_escalada = min_izq + (var_der - min_der) * pendiente)
-
-p_doble_eje <- ggplot(datos, aes(x = FECHA)) +
-  geom_line(aes(y = var_izq,          color = "Serie izquierda"), linewidth = 1) +
-  geom_line(aes(y = var_der_escalada, color = "Serie derecha"),   linewidth = 1) +
-  scale_y_continuous(name     = "Serie izquierda (unidad)",
-                     sec.axis = sec_axis(~ min_der + (. - min_izq) / pendiente,
-                                         name = "Serie derecha (unidad)")) +
-  scale_color_manual(values = c("Serie izquierda" = "darkblue",
-                                "Serie derecha"   = "forestgreen")) +
-  labs(title = "...", subtitle = "...", x = "Fecha", color = NULL, caption = "Fuente: ...") +
-  theme_minimal() +
-  theme(legend.position    = "bottom",
-        axis.title.y.left  = element_text(color = "darkblue"),
-        axis.title.y.right = element_text(color = "forestgreen"),
-        plot.title         = element_text(face = "bold"))
-```
-
-**Mapa estático** (`geom_sf()` es de ggplot2; el objeto lo crea `sf`):
-
-```r
-mapa_dpto <- st_read("ruta/shapefile.shp")            # [NO VISTO EN CLASE]
-
-mapa_dpto <- left_join(mapa_dpto, resumen_dpto, by = "COD_DPTO")
-
-p_mapa <- ggplot(mapa_dpto) +
-  geom_sf(aes(fill = IDF_DPTO), color = "white", linewidth = 0.2) +
-  scale_fill_distiller(palette = "RdYlGn", direction = 1, name = "IDF") +
-  labs(title    = "Título del mapa",
-       subtitle = "Vigencia 2024",
-       caption  = "Fuente: DNP, DANE. Cálculos propios.") +
-  theme_void() +
-  theme(plot.title = element_text(size = 14, face = "bold"))
-```
-
-### 5.3 Gráficas interactivas (Clases 8 y 9)
-
-**ggplot a plotly con tooltip personalizado** (Clase 8):
-
-```r
-# Columna de texto para el tooltip (<b> = negrilla, <br> = salto de línea)
-datos <- datos %>%
-  mutate(text = paste0("<b>", SERIE, "</b>",
-                       "<br>Fecha: ", format(FECHA, "%d/%m/%Y"),
-                       "<br>Valor: ", round(VALOR, 2), " %"))
-
-p_interactivo <- ggplot(datos, aes(x = FECHA, y = VALOR, color = SERIE, text = text)) +
-  geom_line(aes(group = SERIE)) +       # "text" rompe la agrupación: hay que forzarla
-  labs(title = "...", x = "Fecha", y = "...", color = "Serie") +
-  theme_minimal()
-
-p_plotly <- ggplotly(p_interactivo, tooltip = "text")
-p_plotly
-
-htmlwidgets::saveWidget(widget = p_plotly, file = "output/grafico.html",
+htmlwidgets::saveWidget(widget = fig_doble_int,
+                        file = file.path(ruta_resultados, "3_B_doble_eje_interactivo.html"),
                         selfcontained = TRUE)
 ```
 
-**plotly nativo** (Clase 9):
+### 5.14 Mapa departamental en leaflet (Clases 9 y 13)
 
 ```r
-plot_ly(datos, x = ~FECHA, y = ~VALOR,
-        type = "scatter", mode = "lines",
-        hovertemplate = paste("<b>Fecha:</b> %{x}<br>",
-                              "<b>Valor:</b> %{y:.2f} %<br>",
-                              "<extra></extra>")) %>%
-  layout(title = "...",
-         xaxis = list(title = "Fecha"),
-         yaxis = list(title = "..."))
+# ---------- Mapa interactivo ----------
+# CUIDADO: leaflet necesita coordenadas en EPSG 4326.
+mapa_dpto_ll <- st_transform(mapa_dpto, 4326)
+
+pal <- colorBin("YlGnBu", domain = mapa_dpto_ll$idf_dpto, bins = cortes)
+
+leaflet(mapa_dpto_ll) %>%
+  addTiles() %>%
+  addPolygons(layerId = ~cod_dpto,
+              fillColor = ~pal(idf_dpto), fillOpacity = 0.8,
+              color = "white", weight = 1,
+              label = ~paste0(nombre_dpto, ": IDF departamental ", round(idf_dpto, 1))) %>%
+  addLegend(pal = pal, values = ~idf_dpto, title = "IDF departamental")
 ```
 
-**Mapa interactivo con leaflet** (Clase 9). `addPolygons()` y `colorNumeric()` son de leaflet pero no se vieron en clase, así que llevan comentario:
-
-```r
-paleta <- colorNumeric(palette = "RdYlGn", domain = mapa_dpto$IDF_DPTO)  # colorNumeric(): asigna color según el valor
-
-leaflet(mapa_dpto) %>%
-  addProviderTiles(providers$Esri.WorldStreetMap) %>%   # Esri: funciona al abrir el HTML local
-  addPolygons(fillColor   = ~paleta(IDF_DPTO),           # addPolygons(): dibuja los polígonos del shapefile
-              fillOpacity = 0.7, color = "white", weight = 1,
-              label = ~DEPARTAMENTO,
-              popup = ~paste0("<b>", DEPARTAMENTO, "</b><br>",
-                              "IDF departamental: ", round(IDF_DPTO, 1))) %>%
-  addLegend(pal = paleta, values = ~IDF_DPTO, title = "IDF")   # addLegend(): leyenda de colores
-```
-
-### 5.4 Aplicativo Shiny (Clase 9, Ejemplos 3 y 4)
-
-Estructura base: `ui` con barra lateral y pestañas, `server` con un `reactive()` que filtra una sola vez, y un mensaje cuando no hay datos.
+### 5.15 Aplicativo Shiny con tres pestañas (Clase 9)
 
 ```r
 # =============================================================================
-# PASO 1: INTERFAZ (ui)
+# CONFIGURACIÓN INICIAL DEL AMBIENTE
 # =============================================================================
-ui <- fluidPage(
-  titlePanel("Taller 3"),
+# CUIDADO: app.R no usa setwd(); Shiny trabaja desde la carpeta app_shiny/.
+library(shiny)
+library(shinydashboard)
+library(leaflet)
+library(plotly)
+library(DT)
+library(dplyr)
+library(sf)
 
-  sidebarLayout(
-    sidebarPanel(
-      h3("Controles"),
-      selectInput("dpto", "Departamento:", choices = sort(unique(datos$DEPARTAMENTO))),
-      hr(),
-      h4("Instrucciones"),
-      p("Texto escrito por el grupo.")
-    ),
+mapa_dpto <- readRDS("datos/mapa_dpto.rds")
+base_mun  <- readRDS("datos/base_mun.rds")
+tasas     <- readRDS("datos/tasas.rds")
 
-    mainPanel(
-      tabsetPanel(
-        tabPanel("Pestaña 1", plotlyOutput("grafico", height = "600px")),
-        tabPanel("Pestaña 2", DTOutput("tabla")),
-        tabPanel("Pestaña 3", verbatimTextOutput("resumen"))
-      )
+# =============================================================================
+# BLOQUE 1. INTERFAZ
+# =============================================================================
+ui <- dashboardPage(
+  dashboardHeader(title = "Taller 3"),
+  dashboardSidebar(
+    sidebarMenu(
+      menuItem("Datos geoespaciales", tabName = "geo"),
+      menuItem("Series financieras", tabName = "tasas"),
+      menuItem("Diseño libre", tabName = "libre")
+    )
+  ),
+  dashboardBody(
+    tabItems(
+      tabItem(tabName = "geo",
+              selectInput("dpto", "Departamento", choices = sort(mapa_dpto$nombre_dpto)),
+              leafletOutput("mapa"),
+              DTOutput("top3")),
+      tabItem(tabName = "tasas",
+              helpText("[Instrucciones de uso]"),
+              dateInput("fecha", "Fecha a consultar", value = "2025-10-31",
+                        min = "2020-01-01", max = "2025-10-31"),
+              plotlyOutput("doble_eje"),
+              verbatimTextOutput("devaluacion")),
+      tabItem(tabName = "libre",
+              # widget de control obligatorio
+              plotlyOutput("grafica_libre"),
+              box(width = 12, "[Texto explicativo: lo escribe el grupo]"))
     )
   )
 )
 
 # =============================================================================
-# PASO 2: LÓGICA (server)
+# BLOQUE 2. SERVIDOR
 # =============================================================================
-server <- function(input, output) {
+server <- function(input, output, session) {
 
-  # REACTIVE: el filtro se calcula UNA vez y lo usan todos los outputs
-  datos_filtrados <- reactive({
-    datos %>% filter(DEPARTAMENTO == input$dpto)
+  # ---------- Pestaña 1: top 3 municipios ----------
+  output$top3 <- renderDT({
+    base_mun %>%
+      filter(nombre_dpto == input$dpto) %>%
+      slice_max(idf, n = 3) %>%
+      select(Municipio = nombre_mpio, `IDF municipal` = idf)
   })
 
-  output$grafico <- renderPlotly({
-    p <- ggplot(datos_filtrados(), aes(x = ..., y = ..., text = ...)) +
-      geom_point() +
-      theme_minimal()
-    ggplotly(p, tooltip = "text")
+  # Clic en el mapa actualiza el selector
+  observeEvent(input$mapa_shape_click, {
+    cod <- input$mapa_shape_click$id
+    updateSelectInput(session, "dpto",
+                      selected = mapa_dpto$nombre_dpto[mapa_dpto$cod_dpto == cod])
   })
 
-  output$tabla <- renderDT({
-    datatable(datos_filtrados(), options = list(pageLength = 10, scrollX = TRUE))
-  })
-
-  output$resumen <- renderText({
-    datos <- datos_filtrados()
-    if (nrow(datos) > 0) {
-      paste0("Municipios: ", nrow(datos))
-    } else {
-      "No hay datos para los filtros seleccionados"
-    }
+  # ---------- Pestaña 2: devaluación implícita ----------
+  output$devaluacion <- renderText({
+    fila <- tasas %>% filter(fecha == input$fecha)
+    validate(need(nrow(fila) == 1 && !is.na(fila$ibr_dec), "No hay dato de IBR para esa fecha."))
+    validate(need(!is.na(fila$sofr_dec), "No hay dato de SOFR para esa fecha."))
+    pi_dev <- (1 + fila$ibr_dec) / (1 + fila$sofr_dec) - 1
+    sprintf("IBR: %.4f | SOFR: %.4f | Devaluación implícita: %.4f (%.2f %%)",   # sprintf: tasas con decimales fijos
+            fila$ibr_dec, fila$sofr_dec, pi_dev, pi_dev * 100)
   })
 }
 
-# =============================================================================
-# PASO 3: EJECUTAR
-# =============================================================================
-shinyApp(ui = ui, server = server)
-
-# CUIDADO: mientras la app corre, la consola queda ocupada. Se cierra con STOP o Esc.
-# CUIDADO: datos_filtrados() va con paréntesis; sin ellos R devuelve la "receta".
+shinyApp(ui, server)
 ```
+
+Para el literal 3B, `ibr_dec` y `sofr_dec` se calculan en `02_tasas_api_scraping.R` con la misma convención (regla 6, verificación de serie). La conversión elegida se documenta en un comentario y en el registro.
+
+### 5.16 Documento RMarkdown (Clase 9, con la estructura del Taller 2)
+
+````markdown
+---
+title: "Taller 3: Datos geoespaciales, web scraping y visualización"
+author: "Daniel Eduardo Ramirez Hoyos |
+ Daniel Ricardo Valderrama |
+ David Santiago Morales Camacho"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+username <- Sys.getenv("USERNAME")
+ruta_taller <- paste0("C:/Users/", username, "/OneDrive/Escritorio/2026-2/R/Taller 3")
+knitr::opts_knit$set(root.dir = ruta_taller)
+```
+
+# Punto 1
+
+## 1.A IDF departamental artificial
+
+```{r p1_a}
+# ==============================================================================
+# 1.A IDF DEPARTAMENTAL ARTIFICIAL
+# ==============================================================================
+ruta_resultados <- file.path(ruta_taller, "Resultados")
+idf_dpto <- readRDS(file.path(ruta_resultados, "1_A_idf_dpto.rds"))
+```
+
+```{r tabla_1_a, echo=FALSE}
+knitr::kable(idf_dpto,
+             caption = "Tabla 1.A. IDF departamental artificial, 2024",
+             format.args = list(big.mark = ".", decimal.mark = ","))
+```
+
+```{r fig_1_a, echo=FALSE}
+knitr::include_graphics(file.path(ruta_resultados, "1_A_mapa_idf_dpto.png"))
+```
+
+### Análisis 1.A
+
+*[INTERPRETACIÓN: la escribe el grupo]*
+````
+
+Igual que en el Taller 2: chunks con nombre `p<punto>_<literal>` para el código y `tabla_<punto>_<literal>` con `echo=FALSE` para las tablas; cada literal cierra con `### Análisis X.Y` en cursiva.
+
+---
+
+## 6. Estilo de programación del grupo (Talleres 1 y 2)
+
+El código nuevo debe parecerse al de las entregas `Entrega_Final_Taller_1.R` y `Taller_2_markdown.Rmd`, para que el grupo lo reconozca y lo audite sin esfuerzo. Cuando algo de esta sección choque con las convenciones genéricas de la sección 4, gana esta sección, salvo el bloque de inicio fijo y las marcas de no visto.
+
+### 6.1 Patrones que se repiten
+
+| Qué | Cómo lo escribe el grupo | Ejemplo real | Taller |
+|---|---|---|---|
+| Parámetros arriba | Se definen como objetos con comentario y todo el código depende de ellos, nunca de números escritos a mano | `n<- 1000         # tamaño de la muestra` | 1 |
+| Enunciado en el script | Cada literal arranca con un comentario `#a. ...` que repite lo que pide | `#b. ¿Cuántos NA quedaron en el vector convertido?` | 1 |
+| Separadores | Línea `# ====` completa entre ejercicios y secciones; `# ----` para subsecciones | `# 1.3 VARIABLES A MANTENER` entre líneas `# ----` | 1, 2 |
+| Vectores de variables | Las columnas que se usan se declaran en un vector antes de leer, con comentario de qué es cada grupo | `vars_ft <- c("DIRECTORIO","SECUENCIA_P","ORDEN",...)` | 2 |
+| Rutas | `username <- Sys.getenv("USERNAME")`, `paste0()` para la raíz, `file.path()` para subcarpetas, `dir.create(..., showWarnings = FALSE)`; alternativa de Mac comentada | `ruta_resultados <- file.path(ruta_base, "outputs")` | 2 |
+| Lectura repetida | Loop `for` sobre años o archivos, rutas armadas con `paste0()`, `file.exists()` para nombres alternativos | `ruta_noc <- ruta_noc[file.exists(ruta_noc)][1]` | 2 |
+| Verificaciones | Comentario `# Verificación Programática N: qué se revisa`, luego `if` con `cat("Alerta: ...")` o `cat("Verificación exitosa: ...")` | `if (nrow(df_mes) != filas_base) { cat("Alerta: El merge multiplicó filas en", mes, anio, "\n") }` | 2 |
+| Duplicados en la llave | `nrow(df)` contra `nrow(distinct(df, llave1, llave2))` | `nrow(distinct(modulos[[m]], DIRECTORIO, SECUENCIA_P, ORDEN))` | 2 |
+| Marcas de pareja | Columna `Info_X = 1` antes del `left_join` y luego `sum(!is.na(...))` para contar emparejados | `df_ft <- df_ft %>% mutate(Info_FT = 1)` | 2 |
+| Tolerancia numérica | `abs(diferencia) < 1e-6` en lugar de igualdad exacta | `all(abs(chequeo_pob$diferencia) < 1e-6)` | 2 |
+| Etiquetas | `case_when()` con una línea por código y `TRUE ~ ...` al final | `P3271 == 1 ~ "Hombre"` | 2 |
+| Agrupaciones | `group_by()` + `summarise(..., .groups = "drop")` | | 2 |
+| Porcentajes | `round(x / sum(x) * 100, 1)` en una columna `Porcentaje` | | 2 |
+| Totales | Copia de la base con la categoría `"Total nacional"` unida a la original | `full_join(micro_pago, micro_pago %>% mutate(Rama = "Total nacional"), by = colnames(micro_pago))` | 2 |
+| Funciones propias | Documentación `#'` con `@param`, `@return`, `@examples` dentro de la función; validaciones con `stop()` y `warning()` al inicio | `estadisticos_manuales()`, `lista_a_matriz()` | 1 |
+| Reporte de resultados | `cat()` con texto y valores, con `round()` cuando hace falta | `cat("Registros EMICRON emparejados en GEIH:", ...)` | 1, 2 |
+| Reemplazo de NA | Indexación directa | `ocupados_dic$P3069[is.na(ocupados_dic$P3069)] <- 999` | 2 |
+| Gráficas | `labs()` con `title`, `subtitle`, `x`, `y` y `caption = "Fuente: ... Cálculos propios con ..."`; `theme_bw()` | Gráfica 2.2 | 2 |
+| Exportar gráficas | `ggsave(filename = file.path(ruta_resultados, "2_2_nombre.png"), plot = g, width, height, units = "in", dpi = 300)` | | 2 |
+| Interactivas | Columna `text` con `paste0()` y `ggplotly(p, tooltip = "text")`; `htmlwidgets::saveWidget(widget, file, selfcontained = TRUE)` | Gráfica 4.3 | 2 |
+| Exportar tablas | `write.xlsx(list("Hoja" = df, ...), archivo, overwrite = TRUE)` para varias hojas | Exportar Punto 1 | 2 |
+| Tablas en el documento | `knitr::kable(df, caption = "Tabla X.Y. ...", format.args = list(big.mark = ".", decimal.mark = ","))` | | 2 |
+| Colores propios | `"#1F5F99"` (azul), `"#2E8B57"` (verde), `"#C0392B"` (rojo) con `scale_*_manual()` | Gráficas 2.2, 2.3, 4.4 | 2 |
+| Memoria | `rm()` de objetos intermedios al cerrar cada punto | `rm(df_cg, df_ft, df_oc, ...)` | 2 |
+| Nombres de objetos | `snake_case` descriptivo en español; prefijos `df_`, `vars_`, `ruta_`, `g_` (gráfica), `p_` (plotly), `tasa_`, `chequeo_` | `g_tasas`, `chequeo_micro` | 2 |
+
+### 6.2 Qué no se copia de los talleres anteriores
+
+| Hábito anterior | Por qué no se repite | Qué se hace en su lugar |
+|---|---|---|
+| Enunciado pegado como texto entre comillas sueltas (Taller 1) | R lo imprime en consola al correr el script | Comentario `#a. ...` |
+| `help()` dentro del script (Taller 1) | Abre la ayuda cada vez que se corre | Consultar en consola, no dejarlo en el script |
+| Muchos `mutate()` encadenados en una sola línea (Taller 2, punto 2.3) | Difícil de auditar línea por línea | Un `mutate()` o una condición por línea |
+| Nombres mezclados (`propor.NAs`, `Sum_NAs`) (Taller 1) | Rompe la búsqueda por nombre | `snake_case` en minúsculas |
+| `full_join(by = todas las columnas)` para apilar bases (Taller 2) | Si dos filas son idénticas en ambas bases, quedan como una sola | En este taller no se apilan bases; si hiciera falta, se discute antes |
+| Ruta solo para Windows sin aviso | En Mac `USERNAME` viene vacío | Dejar la alternativa de Mac comentada, como en el Taller 2 |
