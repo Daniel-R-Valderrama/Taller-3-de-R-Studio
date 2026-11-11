@@ -1,344 +1,839 @@
-# ==============================================================================
-# BLOQUE 1: PAQUETES Y CARGA DE BASES
-# ==============================================================================
-
+# Taller 3, Punto 1
+cat("\014")
 rm(list = ls())
+# ==============================================================================
+# CONFIGURACIÓN INICIAL DEL AMBIENTE
+# ==============================================================================
 
-# PAQUETES NO VISTOS EN CLASE:
-# - readxl: lee el Excel del IDF, que openxlsx no puede abrir
-# - sf: lee los shapefiles del MGN (ningún paquete visto lee shapefiles)
+# Si es la primera vez o tienen errores de versiones, NO instalen desde aquí:
+# corran primero el script 00_reinstalar_paquetes.R en una sesión nueva de R.
+# CUIDADO: instalar un paquete que ya está cargado deja la instalación a medias.
 
-library(openxlsx)
-library(tidyverse)
-library(readxl)  # [NO VISTO EN CLASE]
-library(sf)      # [NO VISTO EN CLASE]
-library(ggrepel)
+library(sf)          # datos geoespaciales (shapefiles, proyecciones, geometrías)
+library(dplyr)       # manipulación de datos
+library(ggplot2)     # visualización (geom_sf dibuja mapas)
+library(ggrepel)     # etiquetas que no se solapan
+library(BAMMtools)   # getJenksBreaks(): clasificación por cortes naturales
 
-setwd("C:/Users/Daniel/OneDrive/Escritorio/2026-2/R/Taller 3/Bases de Datos")
+#otros paquetes para este punto
+library(openxlsx)      # lectura de los Excel de DNP y DANE y exportación de tablas
+library(RColorBrewer)  # paletas de color para el mapa
+library(docstring)     # documentación de la función de verificación de uniones
+
+# Paquetes no vistos en clase:
+#   readxl: lectura del Excel del IDF (DNP). openxlsx no lo puede abrir porque
+#   el archivo escribe sus etiquetas XML con prefijo "x:" y openxlsx responde
+#   "Workbook has no worksheet". Se llama siempre como readxl::read_excel() y
+#   la línea termina en # [NO VISTO EN CLASE]. No se carga con library().
+
+# ==============================================================================
+# DIRECTORIO DE TRABAJO
+# ==============================================================================
+
+username <- Sys.getenv("USERNAME")     # usuario del sistema
+
+
+# ajustarla a la ubicación de SU carpeta "Taller 3".
+ruta_taller <- paste0("C:/Users/", username,
+                      "/OneDrive/Escritorio/2026-2/R/Taller 3")
+
+#Configuración MacOs
+#username <- Sys.getenv("USER")
+#ruta_taller <- paste0("/Users/", username, "/Taller 3")
+
+setwd(ruta_taller)
+
+# CUIDADO: "Bases de Datos" es solo lectura. Nada se escribe ahí.
+ruta_bases      <- file.path(ruta_taller, "Bases de Datos")
+ruta_resultados <- file.path(ruta_taller, "Resultados")
+ruta_app_datos  <- file.path(ruta_taller, "app_shiny", "datos")
+dir.create(ruta_resultados, showWarnings = FALSE)
+dir.create(ruta_app_datos, showWarnings = FALSE, recursive = TRUE)
+
+# Verificación Programática 1: las carpetas existen
+if (dir.exists(ruta_bases) & dir.exists(ruta_resultados) & dir.exists(ruta_app_datos)) {
+  cat("Verificación exitosa: carpetas encontradas en", getwd(), "\n")
+} else {
+  cat("Alerta: revise la ruta del taller\n")
+}
+
+
+# =============================================================================
+# BLOQUE 1. PARÁMETROS Y FUNCIÓN DE VERIFICACIÓN
+# =============================================================================
+
+# Estructura revisada en los originales. read.xlsx() reemplaza los espacios
+# de los encabezados por puntos ("Código Municipio" queda "Código.Municipio").
+# readxl::read_excel() los deja con espacios ("Código Entidad").
+
+# ---------- Archivos originales ----------
+arch_idf <- "ConsultaIDF_2024_IDF - Municipios_20261029181249.xlsx"   # DNP, IDF municipal 2024
+arch_pob <- "PPED-AreaMun-2018-2042_VP.xlsx"                          # DANE, población municipal por área
+arch_va  <- "anex-PIBDep-ValorAgreMuni-2011-2024p.xlsx"               # DANE, VA municipal 2011-2024p
+carpeta_shp_dpto <- "MGN2025_DPTO_POLITICO"                           # DANE Geoportal, MGN 2025
+carpeta_shp_mpio <- "MGN2025_MPIO_GRAFICO"                            # DANE Geoportal, MGN 2025
+
+# ---------- Hojas y fila del encabezado ----------
+# IDF: hoja única; la fila 16 trae títulos de dimensiones y la 17 los encabezados.
+# Con readxl se indica cuántas filas saltar antes del encabezado (16).
+hoja_idf <- 1;  filas_saltar_idf <- 16
+# Población: hojas "Índice", "PPED", "PobMunicipalxÁrea". Se usa el número
+# de hoja para evitar problemas con la tilde en Windows.
+hoja_pob <- 3;  fila_pob <- 8
+# VA: "Cuadro 1" (hoja 2) trae la serie 2011-2024p con un año por columna.
+hoja_va  <- 2;  fila_va  <- 11
+
+# ---------- Columnas de cada base ----------
+# IDF municipal (DNP), nombres con espacios porque se lee con readxl
+col_idf_cod    <- "Código Entidad"   # código DIVIPOLA del municipio (texto, 5 dígitos)
+col_idf_nombre <- "Entidad"          # nombre del municipio
+col_idf_valor  <- "IDF"              # IDF con bonos (resultado oficial). Alternativa: "IDF Sin Bonos"
+
+# Población (DANE)
+# CUIDADO: en este archivo MPIO es el código y DPMP es el nombre del municipio.
+col_pob_cod   <- "MPIO"              # código DIVIPOLA del municipio
+col_pob_anio  <- "AÑO"               # año de la proyección
+col_pob_area  <- "ÁREA.GEOGRÁFICA"   # Total, Cabecera Municipal, Centros Poblados y Rural Disperso
+col_pob_valor <- "TOTAL"             # población
+valor_area_total <- "Total"          # categoría que corresponde al total municipal
+
+# Valor agregado (DANE)
+col_va_cod   <- "Código.Municipio"   # código DIVIPOLA del municipio
+col_va_valor <- "2023"               # columna del año 2023 en el Cuadro 1
+
+# Shapefiles (DANE). CUIDADO: confirmar con names() en el BLOQUE 2.
+col_shp_dpto_cod    <- "dpto_ccdgo"  # código del departamento (2 dígitos)
+col_shp_dpto_nombre <- "dpto_cnmbr"  # nombre del departamento
+col_shp_mpio_cod    <- "mpio_cdpmp"  # código del municipio (5 dígitos)
+
+# ---------- Parámetros del cálculo ----------
+anio_pob     <- 2024     # año de la población
+n_clases     <- 5        # clases del mapa (getJenksBreaks devuelve n_clases + 1 cortes)
+tolerancia   <- 1e-6     # tolerancia para comparar números
+epsg_metros  <- 3116     # MAGNA-SIRGAS Bogotá, en metros (alternativa: 9377, origen nacional)
+dtol_mpio    <- 500      # metros de tolerancia para simplificar el mapa municipal
+dtol_app     <- 1000     # metros de tolerancia para la versión liviana de la app
+
+# ---------- San Andrés y Providencia: recuadros ampliados ----------
+# CUIDADO: las islas miden pocos km² y en el mapa nacional casi no se ven.
+# Se dibujan aparte, ampliadas, en dos recuadros sobre el mar Caribe.
+# Todas las coordenadas van en grados (longitud, latitud), EPSG 4326.
+caja_san_andres  <- c(xmin = -81.76, ymin = 12.47, xmax = -81.66, ymax = 12.61)   # isla de San Andrés
+caja_providencia <- c(xmin = -81.42, ymin = 13.30, xmax = -81.33, ymax = 13.41)   # Providencia y Santa Catalina
+lim_x_continente <- c(-79.9, -66.8)   # longitud del mapa principal (deja el archipiélago por fuera)
+lim_y_continente <- c(-4.3, 12.6)     # latitud del mapa principal
+pos_san_andres   <- c(xmin = -79.8, xmax = -77.6, ymin = 10.9, ymax = 12.6)   # dónde va el recuadro de San Andrés
+pos_providencia  <- c(xmin = -79.8, xmax = -77.6, ymin = 9.1,  ymax = 10.8)   # dónde va el recuadro de Providencia
+
+# ---------- Función de verificación de uniones ----------
+verificar_union <- function(x, y, llave) {
+  #' Verificar llaves antes de una unión
+  #'
+  #' Cuenta duplicados y llaves sin pareja en ambos sentidos.
+  #'
+  #' @param x data frame de la izquierda
+  #' @param y data frame de la derecha
+  #' @param llave nombre de la columna llave (texto)
+  #' @return lista con duplicados y llaves sin pareja
+  #' @examples
+  #' verificar_union(idf_mun, pob_mun, "cod_mpio")
+  if (!(llave %in% names(x)) | !(llave %in% names(y))) {
+    stop("La llave no existe en alguna de las dos bases")
+  }
+  dup_x <- x %>% count(.data[[llave]]) %>% filter(n > 1)
+  dup_y <- y %>% count(.data[[llave]]) %>% filter(n > 1)
+  solo_x <- x %>% anti_join(y, by = llave)
+  solo_y <- y %>% anti_join(x, by = llave)
+  cat("Duplicados en x:", nrow(dup_x), "| Duplicados en y:", nrow(dup_y), "\n")
+  cat("Sin pareja en y:", nrow(solo_x), "| Sin pareja en x:", nrow(solo_y), "\n")
+  return(list(dup_x = dup_x, dup_y = dup_y, solo_x = solo_x, solo_y = solo_y))
+}
+
+docstring(verificar_union)
+
+# ---------- Función para los recuadros de las islas ----------
+crear_recuadro <- function(datos, caja, titulo, variable) {
+  #' Recuadro ampliado de una isla
+  #'
+  #' Recorta un mapa sf a una caja de coordenadas y lo dibuja con la misma
+  #' escala de colores del mapa principal, sin leyenda.
+  #'
+  #' @param datos objeto sf en EPSG 4326 con la variable de clase (factor)
+  #' @param caja vector con xmin, ymin, xmax y ymax en grados
+  #' @param titulo texto que va encima del recuadro
+  #' @param variable nombre de la columna de clase, entre comillas
+  #' @return objeto gráfico listo para annotation_custom()
+  #' @examples
+  #' crear_recuadro(mapa_dpto, caja_san_andres, "San Andrés", "idf_clase")
+  if (!(variable %in% names(datos))) {
+    stop("La variable no está en los datos")
+  }
+  if (!is.factor(datos[[variable]])) {
+    warning("La variable no es factor: los colores pueden no coincidir con el mapa principal")
+  }
+  # suppressWarnings: st_crop avisa que los atributos se copian igual a cada pedazo
+  datos_isla <- suppressWarnings(st_crop(datos, caja))   # Función no vista: recorta las geometrías a la caja
+  if (nrow(datos_isla) == 0) {
+    stop("La caja no contiene ninguna geometría: revise las coordenadas")
+  }
+  g <- ggplot(datos_isla) +
+    geom_sf(aes(fill = .data[[variable]]), color = "white", linewidth = 0.2) +
+    scale_fill_brewer(palette = "YlGnBu", na.value = "grey80",
+                      drop = FALSE,          # mismos niveles que el mapa principal = mismos colores
+                      guide = "none") +      # sin leyenda: la del mapa principal sirve
+    labs(title = titulo, x = NULL, y = NULL) +
+    theme_bw() +
+    theme(axis.text = element_blank(),
+          axis.ticks = element_blank(),
+          panel.grid = element_blank(),
+          plot.title = element_text(size = 7, face = "bold"),
+          plot.background = element_rect(color = "grey30", fill = "white"))
+  return(ggplotGrob(g))   # Función no vista: convierte el ggplot en un objeto gráfico
+}
+
+docstring(crear_recuadro)
+
+
+# =============================================================================
+# BLOQUE 2. CARGA DE DATOS ORIGINALES
+# =============================================================================
+
+# CUIDADO: los anexos del DANE traen filas de títulos arriba de la tabla.
+# Se saltan con startRow; el archivo original no se toca.
 
 # ---------- IDF municipal 2024 (DNP) ----------
-# Fuente: DNP, Consulta detalle de resultados IDF 2024. Descargado el 29/10/2026
-# CUIDADO: openxlsx no abre este archivo; se usa read_excel()
-# skip = 16 salta las 16 filas de título; la fila 17 trae los nombres de columna
-IDF_2024 <- read_excel("ConsultaIDF_2024_IDF - Municipios_20261029181249.xlsx",
-                       sheet = 1,
-                       skip = 16)  # [NO VISTO EN CLASE]
-IDF_2024 <- as.data.frame(IDF_2024)  # convierte el tibble de readxl en data frame
+# CUIDADO: read.xlsx() falla con este archivo ("Workbook has no worksheet").
+# Se lee con readxl; el original no se toca.
+idf_raw <- readxl::read_excel(file.path(ruta_bases, arch_idf),   # [NO VISTO EN CLASE]
+                              sheet = hoja_idf, skip = filas_saltar_idf)   # [NO VISTO EN CLASE]
+idf_raw <- as.data.frame(idf_raw)        # de tibble a data frame, como las demás bases
 
-# ---------- Proyecciones de población (DANE) ----------
-# Fuente: DANE, Serie municipal de población por área 2018-2042. Descargado el 29/10/2026
-# Hoja 3 = "PobMunicipalxÁrea" (se usa el número para evitar problemas con la tilde)
-DANE_proyecciones <- read.xlsx("PPED-AreaMun-2018-2042_VP.xlsx",
-                               sheet = 3,
-                               startRow = 8)
+# Verificación
+dim(idf_raw)
+names(idf_raw)
+head(idf_raw)
+tail(idf_raw)   # revisar notas al pie o filas de totales
 
-# ---------- Valor agregado municipal (DANE) ----------
-# Fuente: DANE, Valor agregado por municipio 2011-2024p. Descargado el 29/10/2026
-# Cuadro 1 = serie completa a precios corrientes, miles de millones de pesos
-DANE_VA <- read.xlsx("anex-PIBDep-ValorAgreMuni-2011-2024p.xlsx",
-                      sheet = "Cuadro 1",
-                      startRow = 11)
+# ---------- Población municipal 2024 (DANE) ----------
+pob_raw <- read.xlsx(file.path(ruta_bases, arch_pob),
+                     sheet = hoja_pob, startRow = fila_pob)
 
-# ---------- Shapefiles MGN 2025 (DANE) ----------
-# Fuente: DANE Geoportal, MGN2025 nivel departamento y municipio. Descargado el 29/10/2026
-# list.files() busca el .shp dentro de cada carpeta, sin escribir su nombre a mano
-shp_dep <- list.files("MGN2025_DPTO_POLITICO", pattern = "\\.shp$", full.names = TRUE)
-shp_mun <- list.files("MGN2025_MPIO_GRAFICO",  pattern = "\\.shp$", full.names = TRUE)
+# Verificación
+dim(pob_raw)
+names(pob_raw)
+head(pob_raw)
+tail(pob_raw)
 
-shapefile_dep <- st_read(shp_dep)  # [NO VISTO EN CLASE]
-shapefile_mun <- st_read(shp_mun)  # [NO VISTO EN CLASE]
+# ---------- Valor agregado municipal 2023 (DANE) ----------
+va_raw <- read.xlsx(file.path(ruta_bases, arch_va),
+                    sheet = hoja_va, startRow = fila_va)
 
-# ==============================================================================
-# BLOQUE 2: PROYECCIONES DE POBLACIÓN EN FORMATO ANCHO Y UNIÓN DE LA BASE
-# ==============================================================================
-DANE_proyecciones_ancho <- DANE_proyecciones %>%
-  filter(!is.na(AÑO)) %>%
-  pivot_wider(names_from = AÑO,
-              values_from = TOTAL,
-              names_prefix = "pob_")
+# Verificación
+getSheetNames(file.path(ruta_bases, arch_va))   # Función no vista: lista las hojas del Excel
+dim(va_raw)
+names(va_raw)
+head(va_raw)
+tail(va_raw)
 
-# ---------- Población 2024 (L_i) ----------
-poblacion_2024 <- DANE_proyecciones_ancho %>%
-  filter(ÁREA.GEOGRÁFICA == "Total") %>%
-  select(MPIO, DPMP, DP, DPNOM, pob_2024)
+# ---------- Shapefiles departamental y municipal (DANE) ----------
+# Se busca el .shp dentro de cada carpeta para no depender del nombre interno.
+arch_shp_dpto <- list.files(file.path(ruta_bases, carpeta_shp_dpto), pattern = "\\.shp$",
+                            full.names = TRUE, recursive = TRUE)
+arch_shp_mpio <- list.files(file.path(ruta_bases, carpeta_shp_mpio), pattern = "\\.shp$",
+                            full.names = TRUE, recursive = TRUE)
 
-# ---------- Valor agregado 2023 (VA_i) ----------
-valor_agregado_2023 <- DANE_VA %>%
-  filter(!is.na(Código.Departamento)) %>%
-  select(Código.Municipio, Municipio, Código.Departamento, Departamento, `2023`) %>%
-  rename(MPIO = Código.Municipio,
-         DPMP = Municipio,
-         DP = Código.Departamento,
-         DPNOM = Departamento,
-         va_2023 = `2023`)
+# Verificación Programática 2: hay un solo .shp en cada carpeta
+if (length(arch_shp_dpto) != 1 | length(arch_shp_mpio) != 1) {
+  cat("Alerta: revise las carpetas del MGN; se encontraron", length(arch_shp_dpto),
+      "y", length(arch_shp_mpio), "archivos .shp\n")
+} else {
+  cat("Verificación exitosa:", basename(arch_shp_dpto), "y", basename(arch_shp_mpio), "\n")
+}
 
-# ---------- IDF 2024 (IDF_i) ----------
-# Solo el código y el IDF final; las demás columnas del DNP no se usan
-idf_2024 <- IDF_2024 %>%
-  select(`Código Entidad`, IDF) %>%
-  rename(MPIO = `Código Entidad`)
+shp_dpto_raw <- st_read(arch_shp_dpto[1])
+shp_mpio_raw <- st_read(arch_shp_mpio[1])
 
-# ---------- Unión ----------
-base_pob_va <- poblacion_2024 %>%
-  left_join(valor_agregado_2023 %>%
-              select(MPIO, va_2023),
-            by = "MPIO") %>%
-  left_join(idf_2024, by = "MPIO")
+# Verificación
+names(shp_dpto_raw)
+names(shp_mpio_raw)
+nrow(shp_dpto_raw)       # 33 incluyendo Bogotá
+nrow(shp_mpio_raw)
+st_crs(shp_dpto_raw)
+st_crs(shp_mpio_raw)
 
-# ---------- Verificación de la unión ----------
-nrow(anti_join(valor_agregado_2023, poblacion_2024, by = "MPIO"))  # esperado: 0
-nrow(anti_join(poblacion_2024, valor_agregado_2023, by = "MPIO"))  # esperado: 0
-nrow(anti_join(idf_2024, poblacion_2024, by = "MPIO"))  # esperado: 0 (todo el IDF encuentra pareja)
-nrow(anti_join(poblacion_2024, idf_2024, by = "MPIO"))  # esperado: 20 (19 ANM + San Andrés)
-dim(base_pob_va)                                        # esperado: 1123 x 7
-sum(is.na(base_pob_va$IDF))                             # esperado: 20
 
-# ==============================================================================
-# BLOQUE 3: PROYECCIÓN DEL VA Y PONDERADORES w_i
-# ==============================================================================
-# ---------- Parámetro: crecimiento del PIB nominal 2024 ----------
-# Fuente: DANE, PIB total por departamentos (publicación 3 de julio de 2026), fila COLOMBIA,
-# precios corrientes: (1.713.316 / 1.587.200 - 1) * 100 = 7,9458 -> 7,95
-# Se usa la tasa nominal porque el VA está a precios corrientes (la real fue 1,5 %)
+# =============================================================================
+# BLOQUE 3. LIMPIEZA Y LLAVES DIVIPOLA
+# =============================================================================
 
-tasa_pib_2024 <- 7.95
+# CUIDADO: los códigos se filtran ANTES de rellenar con ceros. Un código
+# departamental (por ejemplo 5) quedaría como "00005" y parecería un municipio.
+# Los códigos municipales válidos van de 05001 en adelante.
 
-# ---------- w_i por departamento ----------
-# Se quitan las 20 unidades sin IDF (19 ANM + San Andrés) ANTES de calcular las sumas
-IDF_DEP <- base_pob_va %>%
-  filter(!is.na(IDF)) %>%
-  rename(L_i = pob_2024) %>%
-  mutate(VA_i = va_2023 * (1 + tasa_pib_2024 / 100),
-         L_VA_i = L_i * VA_i) %>%
-  group_by(DP) %>%
-  mutate(sum_L_VA_k = sum(L_VA_i),
-         w_i = L_VA_i / sum_L_VA_k) %>%
+# ---------- IDF municipal ----------
+idf_mun <- idf_raw %>%
+  rename(cod_mpio = all_of(col_idf_cod),        # Función no vista: all_of selecciona columnas por nombre en texto
+         nombre_mpio = all_of(col_idf_nombre),
+         idf = all_of(col_idf_valor)) %>%
+  mutate(cod_num = suppressWarnings(as.integer(cod_mpio))) %>%   # textos como "Total" quedan NA
+  filter(!is.na(cod_num), cod_num >= 1000) %>%
+  mutate(cod_mpio = formatC(cod_num, width = 5, flag = "0"),     # formatC: código municipal a 5 dígitos
+         cod_dpto = substr(cod_mpio, 1, 2),
+         idf = suppressWarnings(as.numeric(idf))) %>%
+  select(cod_dpto, cod_mpio, nombre_mpio, idf)
+
+# Verificación
+table(nchar(idf_mun$cod_mpio))           # todos deben tener 5
+idf_mun %>% count(cod_mpio) %>% filter(n > 1)
+n_distinct(idf_mun$cod_dpto)             # 33 incluyendo Bogotá
+sum(is.na(idf_mun$idf))                  # municipios sin puntaje IDF
+summary(idf_mun$idf)
+
+# ---------- Población 2024 ----------
+pob_mun <- pob_raw %>%
+  rename(cod_mpio = all_of(col_pob_cod),
+         anio = all_of(col_pob_anio),
+         area = all_of(col_pob_area),
+         poblacion = all_of(col_pob_valor)) %>%
+  filter(anio == anio_pob) %>%
+  filter(area == valor_area_total) %>%   # solo el total municipal, no cabecera ni rural
+  mutate(cod_num = suppressWarnings(as.integer(cod_mpio))) %>%
+  filter(!is.na(cod_num), cod_num >= 1000) %>%
+  mutate(cod_mpio = formatC(cod_num, width = 5, flag = "0"),     # formatC: código municipal a 5 dígitos
+         poblacion = as.numeric(poblacion)) %>%
+  select(cod_mpio, poblacion)
+
+# Verificación
+table(nchar(pob_mun$cod_mpio))
+pob_mun %>% count(cod_mpio) %>% filter(n > 1)   # si hay duplicados, el filtro de área falló
+sum(is.na(pob_mun$poblacion))
+cat("Población total", anio_pob, ":", format(sum(pob_mun$poblacion), big.mark = ".", decimal.mark = ","), "\n")
+
+# ---------- Valor agregado 2023 ----------
+# Precios del VA según el anexo (Cuadro 1): precios corrientes, base 2015,
+# miles de millones de pesos. La columna 2024 es provisional (2024p) y no se
+# usa: el enunciado pide proyectar 2023 a 2024.
+va_mun <- va_raw %>%
+  rename(cod_mpio = all_of(col_va_cod),
+         va_2023 = all_of(col_va_valor)) %>%
+  mutate(cod_num = suppressWarnings(as.integer(cod_mpio))) %>%
+  filter(!is.na(cod_num), cod_num >= 1000) %>%
+  mutate(cod_mpio = formatC(cod_num, width = 5, flag = "0"),     # formatC: código municipal a 5 dígitos
+         va_2023 = as.numeric(va_2023)) %>%
+  select(cod_mpio, va_2023)
+
+# Verificación
+table(nchar(va_mun$cod_mpio))
+va_mun %>% count(cod_mpio) %>% filter(n > 1)
+sum(is.na(va_mun$va_2023))
+summary(va_mun$va_2023)
+
+# Verificación Programática 3: municipios con VA 2023 igual a cero o negativo
+# CUIDADO: un VA de cero deja el ponderador del municipio en cero. En el anexo
+# pasa con Nuevo Belén de Bajirá (27493), creado en diciembre de 2023, y con
+# Mapiripana (94663). El grupo decide cómo tratarlos y lo explica.
+va_cero <- va_mun %>% filter(va_2023 <= 0)
+if (nrow(va_cero) > 0) {
+  cat("Alerta:", nrow(va_cero), "municipios con VA 2023 <= 0:", va_cero$cod_mpio, "\n")
+} else {
+  cat("Verificación exitosa: todos los municipios tienen VA 2023 positivo\n")
+}
+
+# ---------- Shapefile departamental ----------
+shp_dpto <- shp_dpto_raw %>%
+  rename(cod_dpto = all_of(col_shp_dpto_cod),
+         nombre_dpto = all_of(col_shp_dpto_nombre)) %>%
+  mutate(cod_dpto = formatC(as.integer(cod_dpto), width = 2, flag = "0")) %>%   # formatC: código departamental a 2 dígitos
+  select(cod_dpto, nombre_dpto)
+
+# Verificación
+table(nchar(shp_dpto$cod_dpto))
+shp_dpto %>% st_drop_geometry() %>% count(cod_dpto) %>% filter(n > 1)
+class(shp_dpto)                          # debe seguir siendo "sf"
+
+# ---------- Shapefile municipal ----------
+shp_mpio <- shp_mpio_raw %>%
+  rename(cod_mpio = all_of(col_shp_mpio_cod)) %>%
+  mutate(cod_mpio = formatC(as.integer(cod_mpio), width = 5, flag = "0")) %>%   # formatC: código municipal a 5 dígitos
+  select(cod_mpio)
+
+# Verificación
+table(nchar(shp_mpio$cod_mpio))
+shp_mpio %>% st_drop_geometry() %>% count(cod_mpio) %>% filter(n > 1)
+
+
+# =============================================================================
+# BLOQUE 4. UNIÓN DE BASES MUNICIPALES
+# =============================================================================
+
+# ---------- Unión IDF + población ----------
+chequeo_pob <- verificar_union(idf_mun, pob_mun, "cod_mpio")
+chequeo_pob$solo_x            # municipios con IDF sin población: revisar uno por uno
+chequeo_pob$solo_y            # municipios con población sin IDF
+
+n_antes <- nrow(idf_mun)
+base_mun <- idf_mun %>%
+  mutate(Info_IDF = 1) %>%
+  left_join(pob_mun %>% mutate(Info_POB = 1), by = "cod_mpio")
+n_despues <- nrow(base_mun)
+
+# Verificación Programática 4: el pegue con población no aumenta las filas
+if (n_despues != n_antes) {
+  cat("Alerta: el pegue con población multiplicó filas (", n_antes, "->", n_despues, ")\n")
+} else {
+  cat("Verificación exitosa: el pegue con población conserva", n_despues, "filas\n")
+}
+cat("Municipios con IDF emparejados con población:", sum(!is.na(base_mun$Info_POB)), "de", n_despues, "\n")
+
+# ---------- Unión con valor agregado ----------
+chequeo_va <- verificar_union(base_mun, va_mun, "cod_mpio")
+chequeo_va$solo_x             # municipios sin VA
+chequeo_va$solo_y             # municipios con VA que no están en la base del IDF
+
+n_antes <- nrow(base_mun)
+base_mun <- base_mun %>%
+  left_join(va_mun %>% mutate(Info_VA = 1), by = "cod_mpio")
+n_despues <- nrow(base_mun)
+
+# Verificación Programática 5: el pegue con VA no aumenta las filas
+if (n_despues != n_antes) {
+  cat("Alerta: el pegue con VA multiplicó filas (", n_antes, "->", n_despues, ")\n")
+} else {
+  cat("Verificación exitosa: el pegue con VA conserva", n_despues, "filas\n")
+}
+cat("Municipios emparejados con VA:", sum(!is.na(base_mun$Info_VA)), "de", n_despues, "\n")
+
+# ---------- Resumen de faltantes ----------
+resumen_faltantes <- data.frame(
+  concepto = c("Municipios en la base del IDF",
+               "Sin puntaje IDF",
+               "Sin población 2024",
+               "Sin VA 2023",
+               "Con los tres datos completos"),
+  municipios = c(nrow(base_mun),
+                 sum(is.na(base_mun$idf)),
+                 sum(is.na(base_mun$poblacion)),
+                 sum(is.na(base_mun$va_2023)),
+                 sum(!is.na(base_mun$idf) & !is.na(base_mun$poblacion) & !is.na(base_mun$va_2023)))
+)
+resumen_faltantes
+
+# ---------- Evidencia de la unión revisada ----------
+write.xlsx(list("Resumen" = resumen_faltantes,
+                "IDF_sin_poblacion" = chequeo_pob$solo_x,
+                "Poblacion_sin_IDF" = chequeo_pob$solo_y,
+                "IDF_sin_VA" = chequeo_va$solo_x,
+                "VA_sin_IDF" = chequeo_va$solo_y),
+           file.path(ruta_resultados, "1_A_verificacion_uniones.xlsx"),
+           overwrite = TRUE)
+
+# Verificación
+file.exists(file.path(ruta_resultados, "1_A_verificacion_uniones.xlsx"))
+
+
+# =============================================================================
+# BLOQUE 5. PROYECCIÓN DEL VA Y PONDERADORES
+# =============================================================================
+
+#a. Proyecten el VA de 2023 a 2024 con el crecimiento del PIB de Colombia en 2024.
+#   Redondeen la tasa porcentual a dos decimales antes de aplicarla.
+
+# ---------- Proyección del VA 2023 a 2024 ----------
+# El VA está a precios corrientes, así que se usa el crecimiento del PIB
+# nominal de Colombia en 2024.
+# Fuente: DANE, Cuentas nacionales departamentales, anexo "PIB total por
+# departamentos", serie 2005-2025pr, base 2015, publicado el 3 de julio de 2026.
+# Fila COLOMBIA, precios corrientes, miles de millones de pesos:
+#   2023 (columna U): 1.587.200
+#   2024p (columna V): 1.713.316
+# Cálculo en Excel: =(V11-U11)/U11*100 = 7,946 -> 7,95 con dos decimales.
+# Coincide con el 7,9 % a precios corrientes del boletín de Cuentas Nacionales Anuales 2024p.
+# El anexo no se carga en R; la tasa queda como constante.
+tasa_pib_2024 <- 7.95                    # crecimiento % del PIB nominal 2024, redondeado a dos decimales
+# [INTERPRETACIÓN: la justificación de la tasa la escribe el grupo]
+
+# Verificación: la constante coincide con el cálculo desde los valores del anexo
+round((1713316 - 1587200) / 1587200 * 100, 2) == tasa_pib_2024   # debe dar TRUE
+
+cat("Tasa aplicada:", sprintf("%.2f %%", tasa_pib_2024), "\n")   # sprintf: tasa con dos decimales
+
+base_mun <- base_mun %>%
+  mutate(va_2024 = va_2023 * (1 + tasa_pib_2024 / 100))
+
+# Verificación Programática 6: la razón VA 2024 / VA 2023 es la misma en todos los municipios
+razon_va <- base_mun$va_2024 / base_mun$va_2023
+if (all(abs(razon_va - (1 + tasa_pib_2024 / 100)) < tolerancia, na.rm = TRUE)) {
+  cat("Verificación exitosa: el VA 2024 es el VA 2023 por", 1 + tasa_pib_2024 / 100, "\n")
+} else {
+  cat("Alerta: la proyección del VA no se aplicó de forma uniforme\n")
+}
+
+# ---------- Ponderadores ----------
+# Solo entran los municipios con IDF, población y VA. Los excluidos quedan
+# registrados en 1_A_verificacion_uniones.xlsx.
+base_mun_w <- base_mun %>%
+  filter(!is.na(idf), !is.na(poblacion), !is.na(va_2024)) %>%
+  group_by(cod_dpto) %>%
+  mutate(w = (poblacion * va_2024) / sum(poblacion * va_2024)) %>%
   ungroup()
 
-# ---------- Verificación: los w_i suman 1 en cada departamento ----------
-nrow(IDF_DEP)  # esperado: 1103
+cat("Municipios que entran al cálculo:", nrow(base_mun_w), "de", nrow(base_mun), "\n")
 
-verif_w <- IDF_DEP %>%
-  group_by(DP, DPNOM) %>%
-  summarise(n_mun = n(),
-            suma_w = sum(w_i)) %>%
-  ungroup()
+# Verificación Programática 7: ponderadores suman 1 por departamento
+suma_w <- base_mun_w %>%
+  group_by(cod_dpto) %>%
+  summarise(suma = sum(w), .groups = "drop")
+if (all(abs(suma_w$suma - 1) < tolerancia)) {
+  cat("Verificación exitosa: los ponderadores suman 1 en los", nrow(suma_w), "departamentos\n")
+} else {
+  warning("Hay departamentos cuyos ponderadores no suman 1")
+}
+summary(base_mun_w$w)
+sum(base_mun_w$w < 0)                    # debe ser 0
 
-verif_w  # esperado: 33 departamentos, suma_w = 1
 
-# CUIDADO: se compara con una tolerancia y no con == 1, porque el computador
-# puede dar 0.9999999999999999 al sumar decimales
-w_suman_1 <- all(abs(verif_w$suma_w - 1) < 1e-10)
+# =============================================================================
+# BLOQUE 6. IDF DEPARTAMENTAL
+# =============================================================================
 
-cat("Departamentos verificados:", nrow(verif_w), "\n")
-cat("Suma mínima de w_i:", min(verif_w$suma_w), "\n")
-cat("Suma máxima de w_i:", max(verif_w$suma_w), "\n")
-cat("¿Los w_i suman 1 en todos los departamentos?", ifelse(w_suman_1, "SÍ", "NO"), "\n")
+#A. Calculen el IDF departamental como una media ponderada del IDF municipal,
+#   con el producto de población y VA como ponderador.
 
-# ==============================================================================
-# BLOQUE 4: IDF DEPARTAMENTAL
-# ==============================================================================
-IDF_departamental <- IDF_DEP %>%
-  group_by(DP, DPNOM) %>%
-  summarise(IDF_dep = sum(w_i * IDF)) %>%
-  ungroup()
+# ---------- Cálculo principal y chequeos ----------
+idf_dpto <- base_mun_w %>%
+  group_by(cod_dpto) %>%
+  summarise(idf_dpto = sum(idf * w),
+            idf_dpto_chequeo = weighted.mean(idf, poblacion * va_2024),
+            idf_dpto_va2023 = weighted.mean(idf, poblacion * va_2023),
+            idf_promedio_simple = mean(idf),
+            n_mpios = n(),
+            poblacion = sum(poblacion),
+            va_2024 = sum(va_2024),
+            .groups = "drop")
 
-IDF_departamental  # esperado: 33 filas
+# Verificación Programática 8: cálculo comprobado por otro procedimiento
+if (all(abs(idf_dpto$idf_dpto - idf_dpto$idf_dpto_chequeo) < tolerancia)) {
+  cat("Verificación exitosa: sum(idf * w) coincide con weighted.mean()\n")
+} else {
+  cat("Alerta: los dos cálculos del IDF departamental no coinciden\n")
+}
 
-# ==============================================================================
-# BLOQUE 5: MAPA DEL IDF DEPARTAMENTAL
-# ==============================================================================
+# Verificación Programática 9: la proyección del VA no cambia los ponderadores.
+# Como todos los municipios crecen a la misma tasa, (1 + tasa) se cancela en w.
+if (all(abs(idf_dpto$idf_dpto - idf_dpto$idf_dpto_va2023) < tolerancia)) {
+  cat("Verificación exitosa: el IDF departamental es el mismo con VA 2023 y VA 2024\n")
+} else {
+  cat("Alerta: el IDF cambia con la proyección; revise si la tasa es uniforme\n")
+}
 
-# ---------- Paleta DANE (Manual de Identidad Visual, p. 30) ----------
-color_dane_oscuro   <- "#7D0641"  # Variación oscura, Pantone 216 C
-color_dane_primario <- "#B6004C"  # Color primario (Magenta DANE), Pantone 7425 C
-color_dane_claro    <- "#DF396B"  # Variación clara, Pantone 191 C
-color_dane_30       <- "#F3DCE4"  # Tinte al 30 % (aproximado de la muestra del manual)
+# Verificación Programática 10: la media ponderada queda dentro del rango municipal
+rango_dpto <- base_mun_w %>%
+  group_by(cod_dpto) %>%
+  summarise(idf_min = min(idf), idf_max = max(idf), .groups = "drop") %>%
+  left_join(idf_dpto %>% select(cod_dpto, idf_dpto), by = "cod_dpto")
+if (all(rango_dpto$idf_dpto >= rango_dpto$idf_min - tolerancia &
+        rango_dpto$idf_dpto <= rango_dpto$idf_max + tolerancia)) {
+  cat("Verificación exitosa: cada IDF departamental está entre el mínimo y el máximo municipal\n")
+} else {
+  cat("Alerta: hay un IDF departamental fuera del rango de sus municipios\n")
+}
 
-# ---------- Verificación de llaves antes de unir ----------
-nrow(shapefile_dep)  # esperado: 33
-sum(!(shapefile_dep$dpto_ccdgo %in% IDF_departamental$DP))  # esperado: 0
-sum(!(IDF_departamental$DP %in% shapefile_dep$dpto_ccdgo))  # esperado: 0
+# CUIDADO: Bogotá (11) es un solo municipio, así que su IDF departamental es
+# su IDF municipal. Lo mismo pasa en San Andrés (88): la base del DNP solo trae
+# a Providencia (88564), porque la isla de San Andrés (88001) no tiene IDF municipal.
+idf_dpto %>% filter(n_mpios == 1)
 
-# ---------- Unión del shapefile con el IDF departamental ----------
-# CUIDADO: el shapefile va primero en el left_join para que el resultado siga siendo un objeto sf
-mapa_idf_dep <- shapefile_dep %>%
-  left_join(IDF_departamental, by = c("dpto_ccdgo" = "DP"))
+summary(idf_dpto$idf_dpto)
 
-# ---------- San Andrés aparte (recuadro) ----------
-# CUIDADO: los límites de la escala se calculan con TODOS los departamentos,
-# para que el recuadro y el mapa principal usen los mismos colores
-limites_idf_dep <- range(mapa_idf_dep$IDF_dep)
 
-mapa_dep_continental <- mapa_idf_dep %>% filter(dpto_ccdgo != "88")
-mapa_dep_islas       <- mapa_idf_dep %>% filter(dpto_ccdgo == "88")
+# =============================================================================
+# BLOQUE 7. MAPA DEPARTAMENTAL
+# =============================================================================
 
-p_recuadro_dep <- ggplot(mapa_dep_islas) +
-  geom_sf(aes(fill = IDF_dep),
-          color = "grey40",
-          linewidth = 0.2) +
-  scale_fill_gradientn(colours = c(color_dane_30, color_dane_claro,
-                                   color_dane_primario, color_dane_oscuro),
-                       limits = limites_idf_dep,
-                       guide = "none") +
-  # Zoom a San Andrés (abajo) y Providencia (arriba), en longitud y latitud
-  coord_sf(xlim = c(-81.8, -81.3), ylim = c(12.45, 13.42), expand = FALSE) +
-  labs(title = paste0("San Andrés y Providencia\n", sprintf("%.1f", mapa_dep_islas$IDF_dep))) +
-  theme_void() +
-  theme(plot.title = element_text(size = 6, hjust = 0.5),
-        plot.background = element_rect(fill = "white", color = "grey40", linewidth = 0.4))
+# ---------- Unión con el shapefile ----------
+chequeo_shp_dpto <- verificar_union(shp_dpto, idf_dpto, "cod_dpto")
+chequeo_shp_dpto$solo_x       # departamentos del mapa sin IDF
 
-# ---------- Posición del recuadro: esquina superior izquierda ----------
-# st_bbox() da los bordes del mapa continental (xmin, xmax, ymin, ymax)
-caja_dep  <- st_bbox(mapa_dep_continental)  # [NO VISTO EN CLASE]
-ancho_dep <- as.numeric(caja_dep["xmax"] - caja_dep["xmin"])
-alto_dep  <- as.numeric(caja_dep["ymax"] - caja_dep["ymin"])
+# CUIDADO: el objeto sf va a la izquierda del join para conservar la geometría.
+n_antes <- nrow(shp_dpto)
+mapa_dpto <- shp_dpto %>%
+  left_join(idf_dpto, by = "cod_dpto")
+n_despues <- nrow(mapa_dpto)
 
-# ---------- Etiquetas ----------
-# 11 = Bogotá, 17 = Caldas, 63 = Quindío, 66 = Risaralda
-deptos_burbuja <- c("11", "17", "63", "66")
+# Verificación Programática 11: el pegue con el shapefile conserva las filas
+if (n_despues != n_antes) {
+  cat("Alerta: el pegue con el shapefile cambió el número de filas (", n_antes, "->", n_despues, ")\n")
+} else {
+  cat("Verificación exitosa: el pegue con el shapefile conserva", n_despues, "departamentos\n")
+}
+sum(is.na(mapa_dpto$idf_dpto))
+class(mapa_dpto)                         # debe seguir siendo "sf"
 
-mapa_dep_continental <- mapa_dep_continental %>%
-  mutate(etiqueta = sprintf("%.1f", IDF_dep),  # sprintf: número como texto con 1 decimal
-         color_texto = ifelse(IDF_dep >= median(mapa_idf_dep$IDF_dep), "white", "black"))
+# ---------- Clases con cortes naturales ----------
+cortes_dpto <- getJenksBreaks(mapa_dpto$idf_dpto[!is.na(mapa_dpto$idf_dpto)], k = n_clases + 1)
+cortes_dpto
 
-etiquetas_mapa    <- mapa_dep_continental %>% filter(!(dpto_ccdgo %in% deptos_burbuja))
-etiquetas_burbuja <- mapa_dep_continental %>% filter(dpto_ccdgo %in% deptos_burbuja) %>% arrange(dpto_ccdgo)
+etiquetas_dpto <- paste0(formatC(cortes_dpto[-length(cortes_dpto)], format = "f", digits = 1),   # formatC: límites de clase con un decimal
+                         " - ",
+                         formatC(cortes_dpto[-1], format = "f", digits = 1))
+
+mapa_dpto <- mapa_dpto %>%
+  mutate(idf_clase = cut(idf_dpto, breaks = cortes_dpto,
+                         labels = etiquetas_dpto, include.lowest = TRUE))
+
+# Verificación
+table(mapa_dpto$idf_clase, useNA = "ifany")
+length(unique(cortes_dpto)) == n_clases + 1   # cortes sin repetir
+
+# ---------- Etiqueta con el valor del IDF ----------
+mapa_dpto <- mapa_dpto %>%
+  mutate(idf_etiqueta = formatC(idf_dpto, format = "f", digits = 1, decimal.mark = ","))   # formatC: IDF con un decimal y coma decimal
+mapa_dpto$idf_etiqueta[is.na(mapa_dpto$idf_dpto)] <- ""   # sin etiqueta si no hay IDF
+
+# Verificación
+head(mapa_dpto %>% st_drop_geometry() %>% select(nombre_dpto, idf_dpto, idf_etiqueta))
+
+# ---------- Recuadros de San Andrés y Providencia ----------
+# CUIDADO: el departamento 88 es un solo polígono con las dos islas; los dos
+# recuadros muestran el mismo IDF departamental (el de Providencia, único
+# municipio del archipiélago con IDF).
+st_crs(mapa_dpto)$IsGeographic           # debe salir TRUE: coordenadas en grados, como las cajas
+etiqueta_88 <- mapa_dpto$idf_etiqueta[mapa_dpto$cod_dpto == "88"]
+
+recuadro_sa_dpto  <- crear_recuadro(mapa_dpto, caja_san_andres,
+                                    paste0("San Andrés\nIDF dpto.: ", etiqueta_88), "idf_clase")
+recuadro_pro_dpto <- crear_recuadro(mapa_dpto, caja_providencia,
+                                    paste0("Providencia y Santa Catalina\nIDF dpto.: ", etiqueta_88), "idf_clase")
 
 # ---------- Mapa ----------
-p_mapa_idf_dep <- ggplot(mapa_dep_continental) +
-  geom_sf(aes(fill = IDF_dep),
-          color = "white",
-          linewidth = 0.2) +
-  geom_sf_text(data = etiquetas_mapa,
-               aes(label = etiqueta, color = color_texto),
-               size = 2.5) +
-  geom_label_repel(data = etiquetas_burbuja,
-                   aes(label = paste0(DPNOM, ": ", etiqueta), geometry = geometry),
-                   stat = "sf_coordinates",
-                   nudge_x = c(4, -5, -5, -5),
-                   nudge_y = c(0, 1.2, -1.2, 0),
-                   min.segment.length = 0,
-                   size = 2.8,
-                   fill = "white",
-                   color = color_dane_oscuro,
-                   segment.color = color_dane_oscuro) +
-  annotation_custom(ggplotGrob(p_recuadro_dep),
-                    xmin = as.numeric(caja_dep["xmin"]),
-                    xmax = as.numeric(caja_dep["xmin"]) + 0.20 * ancho_dep,
-                    ymin = as.numeric(caja_dep["ymax"]) - 0.22 * alto_dep,
-                    ymax = as.numeric(caja_dep["ymax"])) +
-  scale_color_identity() +
-  scale_fill_gradientn(colours = c(color_dane_30, color_dane_claro,
-                                   color_dane_primario, color_dane_oscuro),
-                       limits = limites_idf_dep,
-                       name = "IDF\ndepartamental") +
-  labs(title = "Índice de Desempeño Fiscal (IDF) artificial por departamento, 2024",
-       subtitle = "Promedio del IDF municipal ponderado por población × valor agregado",
-       caption = "Fuente: DNP (IDF 2024), DANE (proyecciones de población, valor agregado municipal y MGN 2025). Cálculos propios.") +
-  theme_void() +
-  theme(plot.title = element_text(face = "bold", size = 13),
-        plot.subtitle = element_text(size = 10),
-        plot.caption = element_text(size = 7, hjust = 0),
-        legend.position = "right")
+g_mapa_dpto <- ggplot(mapa_dpto) +
+  geom_sf(aes(fill = idf_clase), color = "white", linewidth = 0.2) +
+  geom_text_repel(aes(geometry = geometry, label = idf_etiqueta),
+                  stat = "sf_coordinates", size = 2.5, fontface = "bold",
+                  min.segment.length = 0) +
+  scale_fill_brewer(palette = "YlGnBu", name = "IDF departamental\n(cortes de Jenks)",
+                    na.value = "grey80", drop = FALSE) +
+  labs(title = "Índice de Desempeño Fiscal artificial por departamento, 2024",
+       subtitle = "Media ponderada del IDF municipal (ponderador: población 2024 × VA 2024 proyectado)",
+       x = NULL, y = NULL,
+       caption = "Fuente: DNP (IDF 2024), DANE (proyecciones de población, VA municipal 2023, MGN). Cálculos propios con R.") +
+  annotation_custom(recuadro_sa_dpto,                     # Función no vista: pone un gráfico dentro de otro
+                    xmin = pos_san_andres[["xmin"]], xmax = pos_san_andres[["xmax"]],
+                    ymin = pos_san_andres[["ymin"]], ymax = pos_san_andres[["ymax"]]) +
+  annotation_custom(recuadro_pro_dpto,
+                    xmin = pos_providencia[["xmin"]], xmax = pos_providencia[["xmax"]],
+                    ymin = pos_providencia[["ymin"]], ymax = pos_providencia[["ymax"]]) +
+  coord_sf(xlim = lim_x_continente, ylim = lim_y_continente,   # Función no vista: limita el área del mapa
+           expand = FALSE) +
+  theme_bw() +
+  theme(axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid = element_blank())
 
-p_mapa_idf_dep
+g_mapa_dpto
 
-dir.create("../Resultados", showWarnings = FALSE)
-ggsave("../Resultados/mapa_idf_departamental.png",
-       plot = p_mapa_idf_dep,
-       width = 8, height = 10, dpi = 300,
-       bg = "white")
-# ==============================================================================
-# BLOQUE 6: MAPA DEL IDF MUNICIPAL
-# ==============================================================================
+ggsave(filename = file.path(ruta_resultados, "1_A_mapa_idf_dpto.png"),
+       plot = g_mapa_dpto, width = 8, height = 9, units = "in", dpi = 300)
 
-# ---------- Verificación de llaves antes de unir ----------
-nrow(shapefile_mun)  # esperado: 1122
-class(shapefile_mun$mpio_cdpmp)  # esperado: "character"
-sum(!(idf_2024$MPIO %in% shapefile_mun$mpio_cdpmp))  # municipios con IDF sin polígono
-idf_2024$MPIO[!(idf_2024$MPIO %in% shapefile_mun$mpio_cdpmp)]  # cuáles son
-sum(!(shapefile_mun$mpio_cdpmp %in% idf_2024$MPIO))  # polígonos sin IDF (esperado: ANM y San Andrés)
+# Verificación
+file.exists(file.path(ruta_resultados, "1_A_mapa_idf_dpto.png"))
 
-# ---------- Problema computacional: tamaño del shapefile ----------
-# object.size() mide cuánta memoria ocupa un objeto en R
-format(object.size(shapefile_mun), units = "MB")
+# [INTERPRETACIÓN: la escribe el grupo en el .Rmd]
 
-# ---------- Simplificación de los polígonos ----------
-# st_transform() pasa a coordenadas en metros (EPSG 9377, origen nacional, el oficial del DANE)
-# st_simplify() quita vértices: dTolerance = 500 junta puntos a menos de 500 m
-shapefile_mun_simple <- shapefile_mun %>%
-  st_transform(9377) %>%                                    # [NO VISTO EN CLASE]
-  st_simplify(dTolerance = 500, preserveTopology = TRUE)    # [NO VISTO EN CLASE]
 
-format(object.size(shapefile_mun_simple), units = "MB")
+# =============================================================================
+# BLOQUE 8. MAPA MUNICIPAL (PUNTO 1B)
+# =============================================================================
 
-# ---------- Unión del shapefile con el IDF municipal ----------
-# CUIDADO: el shapefile va primero para que el resultado siga siendo sf
-mapa_idf_mun <- shapefile_mun_simple %>%
-  left_join(idf_2024, by = c("mpio_cdpmp" = "MPIO"))
+#B. Intenten elaborar un mapa del IDF municipal y expliquen los problemas
+#   computacionales encontrados.
 
-nrow(mapa_idf_mun)             # esperado: 1122
-sum(is.na(mapa_idf_mun$IDF))   # polígonos sin IDF (quedan en gris)
+# ---------- Diagnóstico del shapefile original ----------
+nrow(shp_mpio)
+print(object.size(shp_mpio), units = "Mb")
+n_invalidas <- sum(!st_is_valid(shp_mpio))   # Función no vista: identifica geometrías inválidas
+n_vertices  <- nrow(st_coordinates(shp_mpio))   # Función no vista: extrae los vértices de las geometrías
+cat("Geometrías inválidas:", n_invalidas, "| Vértices:", format(n_vertices, big.mark = ".", decimal.mark = ","), "\n")
 
-# ---------- San Andrés aparte (recuadro) ----------
-limites_idf_mun <- range(mapa_idf_mun$IDF, na.rm = TRUE)
+tiempo_original <- system.time(print(ggplot(shp_mpio) + geom_sf()))   # tiempo de dibujo original
+tiempo_original
 
-mapa_mun_continental <- mapa_idf_mun %>% filter(dpto_ccdgo != "88")
+# ---------- Corrección y simplificación ----------
+tiempo_simplificar <- system.time({
+  shp_mpio_simple <- shp_mpio %>%
+    st_make_valid() %>%                  # Función no vista: corrige geometrías inválidas
+    st_transform(epsg_metros) %>%        # proyección en metros para que dTolerance esté en metros
+    st_simplify(preserveTopology = TRUE, dTolerance = dtol_mpio)   # Función no vista: reduce vértices
+})
+tiempo_simplificar
 
-# El recuadro usa el shapefile original (sin simplificar, en longitud y latitud):
-# las islas son pequeñas y no pesan, y simplificadas a 500 m perderían su forma
-mapa_mun_islas <- shapefile_mun %>%
-  filter(dpto_ccdgo == "88") %>%
-  left_join(idf_2024, by = c("mpio_cdpmp" = "MPIO"))
+# CUIDADO: st_make_valid() y st_simplify() pueden devolver una mezcla de tipos
+# (POLYGON, MULTIPOLYGON y a veces GEOMETRYCOLLECTION). Con la mezcla, la columna
+# de geometría queda como sfc_GEOMETRY y st_coordinates() no funciona.
+table(st_geometry_type(shp_mpio_simple))   # Función no vista: tipo de geometría de cada fila
 
-p_recuadro_mun <- ggplot(mapa_mun_islas) +
-  geom_sf(aes(fill = IDF),
-          color = "grey40",
-          linewidth = 0.2) +
-  scale_fill_gradientn(colours = c(color_dane_30, color_dane_claro,
-                                   color_dane_primario, color_dane_oscuro),
-                       limits = limites_idf_mun,
-                       na.value = "grey80",
-                       guide = "none") +
-  coord_sf(xlim = c(-81.8, -81.3), ylim = c(12.45, 13.42), expand = FALSE) +
-  labs(title = "San Andrés y Providencia") +
-  theme_void() +
-  theme(plot.title = element_text(size = 6, hjust = 0.5),
-        plot.background = element_rect(fill = "white", color = "grey40", linewidth = 0.4))
+# ---------- Unificar el tipo de geometría ----------
+shp_mpio_simple <- shp_mpio_simple %>%
+  st_collection_extract("POLYGON") %>%   # Función no vista: deja solo los polígonos de cada colección
+  st_cast("MULTIPOLYGON")                # Función no vista: lleva todo a MULTIPOLYGON
 
-caja_mun  <- st_bbox(mapa_mun_continental)  # [NO VISTO EN CLASE]
-ancho_mun <- as.numeric(caja_mun["xmax"] - caja_mun["xmin"])
-alto_mun  <- as.numeric(caja_mun["ymax"] - caja_mun["ymin"])
+# Verificación
+table(st_geometry_type(shp_mpio_simple))   # debe quedar solo MULTIPOLYGON
+class(st_geometry(shp_mpio_simple))        # debe ser sfc_MULTIPOLYGON
+print(object.size(shp_mpio_simple), units = "Mb")
+n_vertices_simple <- nrow(st_coordinates(shp_mpio_simple))   # Función no vista: extrae los vértices
+cat("Vértices después de simplificar:", format(n_vertices_simple, big.mark = ".", decimal.mark = ","),
+    "(", round(n_vertices_simple / n_vertices * 100, 1), "% del original )\n")
+sum(st_is_empty(shp_mpio_simple))        # Función no vista: polígonos que desaparecieron al simplificar
+nrow(shp_mpio_simple) == nrow(shp_mpio)
 
-# ---------- Mapa ----------
-p_mapa_idf_mun <- ggplot(mapa_mun_continental) +
-  geom_sf(aes(fill = IDF),
-          color = "white",
-          linewidth = 0.05) +
-  annotation_custom(ggplotGrob(p_recuadro_mun),
-                    xmin = as.numeric(caja_mun["xmin"]),
-                    xmax = as.numeric(caja_mun["xmin"]) + 0.20 * ancho_mun,
-                    ymin = as.numeric(caja_mun["ymax"]) - 0.22 * alto_mun,
-                    ymax = as.numeric(caja_mun["ymax"])) +
-  scale_fill_gradientn(colours = c(color_dane_30, color_dane_claro,
-                                   color_dane_primario, color_dane_oscuro),
-                       limits = limites_idf_mun,
-                       na.value = "grey80",
-                       name = "IDF\nmunicipal") +
-  labs(title = "Índice de Desempeño Fiscal (IDF) por municipio, 2024",
-       subtitle = "En gris: áreas no municipalizadas y San Andrés, que no tienen IDF",
-       caption = "Fuente: DNP (IDF 2024), DANE (MGN 2025). Polígonos simplificados a 500 m, excepto el recuadro.") +
-  theme_void() +
-  theme(plot.title = element_text(face = "bold", size = 13),
-        plot.subtitle = element_text(size = 10),
-        plot.caption = element_text(size = 7, hjust = 0),
-        legend.position = "right")
+tiempo_simple <- system.time(print(ggplot(shp_mpio_simple) + geom_sf()))
+tiempo_simple
 
-system.time(print(p_mapa_idf_mun))
+# ---------- Unión con el IDF municipal ----------
+chequeo_shp_mpio <- verificar_union(shp_mpio_simple, base_mun, "cod_mpio")
+chequeo_shp_mpio$solo_x       # polígonos sin IDF (por ejemplo, áreas no municipalizadas)
 
-dir.create("../Resultados", showWarnings = FALSE)
-ggsave("../Resultados/mapa_idf_municipal.png",
-       plot = p_mapa_idf_mun,
-       width = 8, height = 10, dpi = 300,
-       bg = "white")
+n_antes <- nrow(shp_mpio_simple)
+mapa_mpio <- shp_mpio_simple %>%
+  left_join(base_mun %>% select(cod_mpio, cod_dpto, nombre_mpio, idf), by = "cod_mpio")
+n_despues <- nrow(mapa_mpio)
+
+# Verificación Programática 12: el pegue con el shapefile municipal conserva las filas
+if (n_despues != n_antes) {
+  cat("Alerta: el pegue con el shapefile municipal cambió las filas (", n_antes, "->", n_despues, ")\n")
+} else {
+  cat("Verificación exitosa: el pegue con el shapefile municipal conserva", n_despues, "polígonos\n")
+}
+sum(is.na(mapa_mpio$idf))
+
+# ---------- Clases y mapa ----------
+cortes_mpio <- getJenksBreaks(mapa_mpio$idf[!is.na(mapa_mpio$idf)], k = n_clases + 1)
+
+etiquetas_mpio <- paste0(formatC(cortes_mpio[-length(cortes_mpio)], format = "f", digits = 1),   # formatC: límites de clase con un decimal
+                         " - ",
+                         formatC(cortes_mpio[-1], format = "f", digits = 1))
+
+mapa_mpio <- mapa_mpio %>%
+  mutate(idf_clase = cut(idf, breaks = cortes_mpio,
+                         labels = etiquetas_mpio, include.lowest = TRUE))
+
+# Verificación
+table(mapa_mpio$idf_clase, useNA = "ifany")
+
+# ---------- Recuadros de San Andrés y Providencia ----------
+# CUIDADO: las cajas de las islas están en grados; el mapa municipal está en
+# metros (EPSG 3116). Se pasa a 4326 solo para dibujar.
+mapa_mpio_4326 <- st_transform(mapa_mpio, 4326)
+st_crs(mapa_mpio_4326)$IsGeographic      # debe salir TRUE: coordenadas en grados, como las cajas
+
+recuadro_sa_mpio  <- crear_recuadro(mapa_mpio_4326, caja_san_andres,
+                                    "San Andrés (sin IDF municipal)", "idf_clase")
+recuadro_pro_mpio <- crear_recuadro(mapa_mpio_4326, caja_providencia,
+                                    "Providencia y Santa Catalina", "idf_clase")
+
+g_mapa_mpio <- ggplot(mapa_mpio_4326) +
+  geom_sf(aes(fill = idf_clase), color = NA) +
+  geom_sf(data = st_transform(shp_dpto, 4326), fill = NA, color = "grey30", linewidth = 0.2) +
+  scale_fill_brewer(palette = "YlGnBu", name = "IDF municipal\n(cortes de Jenks)",
+                    na.value = "grey80", drop = FALSE) +
+  labs(title = "Índice de Desempeño Fiscal municipal, 2024",
+       subtitle = paste0("Polígonos simplificados con tolerancia de ", dtol_mpio, " m; gris: sin dato"),
+       x = NULL, y = NULL,
+       caption = "Fuente: DNP (IDF 2024), DANE (MGN). Cálculos propios con R.") +
+  annotation_custom(recuadro_sa_mpio,                     # Función no vista: pone un gráfico dentro de otro
+                    xmin = pos_san_andres[["xmin"]], xmax = pos_san_andres[["xmax"]],
+                    ymin = pos_san_andres[["ymin"]], ymax = pos_san_andres[["ymax"]]) +
+  annotation_custom(recuadro_pro_mpio,
+                    xmin = pos_providencia[["xmin"]], xmax = pos_providencia[["xmax"]],
+                    ymin = pos_providencia[["ymin"]], ymax = pos_providencia[["ymax"]]) +
+  coord_sf(xlim = lim_x_continente, ylim = lim_y_continente,   # Función no vista: limita el área del mapa
+           expand = FALSE) +
+  theme_bw() +
+  theme(axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid = element_blank())
+
+tiempo_mapa_mpio <- system.time(
+  ggsave(filename = file.path(ruta_resultados, "1_B_mapa_idf_mpio.png"),
+         plot = g_mapa_mpio, width = 8, height = 9, units = "in", dpi = 300)
+)
+
+# Verificación
+file.exists(file.path(ruta_resultados, "1_B_mapa_idf_mpio.png"))
+
+# ---------- Insumos para la explicación del 1B ----------
+diagnostico_1b <- data.frame(
+  medida = c("Polígonos", "Geometrías inválidas", "Vértices",
+             "Tamaño en memoria (Mb)", "Segundos para dibujar",
+             "Segundos para simplificar", "Segundos para exportar el mapa final"),
+  original = c(nrow(shp_mpio), n_invalidas, n_vertices,
+               round(as.numeric(object.size(shp_mpio)) / 1024^2, 1),
+               round(tiempo_original[["elapsed"]], 1), NA, NA),
+  simplificado = c(nrow(shp_mpio_simple), sum(!st_is_valid(shp_mpio_simple)), n_vertices_simple,
+                   round(as.numeric(object.size(shp_mpio_simple)) / 1024^2, 1),
+                   round(tiempo_simple[["elapsed"]], 1),
+                   round(tiempo_simplificar[["elapsed"]], 1),
+                   round(tiempo_mapa_mpio[["elapsed"]], 1))
+)
+diagnostico_1b
+
+# [INTERPRETACIÓN: la explicación de los problemas computacionales la escribe el grupo]
+
+
+# =============================================================================
+# BLOQUE 9. EXPORTAR RESULTADOS
+# =============================================================================
+
+# ---------- Tabla del IDF departamental ----------
+tabla_idf_dpto <- mapa_dpto %>%
+  st_drop_geometry() %>%
+  select(cod_dpto, nombre_dpto, idf_dpto, idf_promedio_simple, n_mpios, poblacion, va_2024) %>%
+  arrange(desc(idf_dpto)) %>%
+  mutate(idf_dpto = round(idf_dpto, 2),
+         idf_promedio_simple = round(idf_promedio_simple, 2))
+
+write.xlsx(list("IDF_departamental" = tabla_idf_dpto,
+                "Suma_ponderadores" = suma_w,
+                "Rango_municipal" = rango_dpto,
+                "Diagnostico_1B" = diagnostico_1b),
+           file.path(ruta_resultados, "1_A_idf_dpto.xlsx"),
+           overwrite = TRUE)
+
+# ---------- Objetos para el .Rmd ----------
+saveRDS(tabla_idf_dpto, file.path(ruta_resultados, "1_A_idf_dpto.rds"))
+saveRDS(resumen_faltantes, file.path(ruta_resultados, "1_A_resumen_faltantes.rds"))
+saveRDS(diagnostico_1b, file.path(ruta_resultados, "1_B_diagnostico.rds"))
+
+# ---------- Objetos para la app (pestaña 1) ----------
+# CUIDADO: leaflet necesita EPSG 4326. Se guarda una versión simplificada para
+# que la app cargue rápido; el cálculo del IDF no cambia.
+mapa_dpto_app <- mapa_dpto %>%
+  st_make_valid() %>%                    # Función no vista: corrige geometrías inválidas
+  st_transform(epsg_metros) %>%
+  st_simplify(preserveTopology = TRUE, dTolerance = dtol_app) %>%   # Función no vista: reduce vértices
+  st_collection_extract("POLYGON") %>%   # Función no vista: deja solo los polígonos de cada colección
+  st_cast("MULTIPOLYGON") %>%            # Función no vista: lleva todo a MULTIPOLYGON
+  st_transform(4326)
+
+base_mun_app <- base_mun %>%
+  left_join(shp_dpto %>% st_drop_geometry(), by = "cod_dpto") %>%
+  select(cod_dpto, nombre_dpto, cod_mpio, nombre_mpio, idf, poblacion, va_2024)
+
+saveRDS(mapa_dpto_app, file.path(ruta_app_datos, "mapa_dpto.rds"))
+saveRDS(base_mun_app, file.path(ruta_app_datos, "base_mun.rds"))
+saveRDS(cortes_dpto, file.path(ruta_app_datos, "cortes_dpto.rds"))
+
+# Verificación
+file.exists(file.path(ruta_resultados, c("1_A_idf_dpto.xlsx", "1_A_idf_dpto.rds",
+                                         "1_A_resumen_faltantes.rds", "1_B_diagnostico.rds")))
+file.exists(file.path(ruta_app_datos, c("mapa_dpto.rds", "base_mun.rds", "cortes_dpto.rds")))
+print(object.size(mapa_dpto_app), units = "Mb")
+table(st_geometry_type(mapa_dpto_app))   # debe quedar solo MULTIPOLYGON
+nrow(mapa_dpto_app) == nrow(mapa_dpto)   # no se pierden departamentos
+sum(is.na(base_mun_app$nombre_dpto))     # municipios sin nombre de departamento
+
+# ---------- Memoria ----------
+rm(idf_raw, pob_raw, va_raw, shp_dpto_raw, shp_mpio_raw,
+   shp_mpio, shp_mpio_simple, chequeo_pob, chequeo_va,
+   chequeo_shp_dpto, chequeo_shp_mpio, razon_va, n_antes, n_despues)
