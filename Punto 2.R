@@ -912,7 +912,13 @@ if (!all(file.exists(archivos_doble))) {
 } else {
   cat("Verificación exitosa: gráficas de doble eje guardadas en", ruta_resultados, "\n")
 }
-
+# ---------- Para el punto 3 ----------
+ruta_app_datos <- file.path(ruta_taller, "app_shiny", "datos")
+dir.create(ruta_app_datos, showWarnings = FALSE, recursive = TRUE)
+saveRDS(ibr_on,        file.path(ruta_app_datos, "ibr_on.rds"))
+saveRDS(sofr_on,       file.path(ruta_app_datos, "sofr_on.rds"))
+saveRDS(tasas_mensual, file.path(ruta_app_datos, "tasas_mensual.rds"))
+              
 # [INTERPRETACIÓN: la comparación de tendencias de la IBR y la SOFR la escribe el grupo]
 
 # ---------- Memoria ----------
