@@ -56,7 +56,7 @@ ruta_taller <- paste0("/Users/", username, "/Documents/Maestría/R/Taller 3/Tall
 
 setwd(ruta_taller)
 
-ruta_resultados <- file.path(ruta_taller, "output")
+ruta_resultados <- file.path(ruta_taller, "Resultados")
 dir.create(ruta_resultados, showWarnings = FALSE)
 
 # Verificación Programática 1: la carpeta de salida existe
