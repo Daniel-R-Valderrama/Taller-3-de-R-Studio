@@ -310,7 +310,7 @@ sum(is.na(pob_mun$poblacion))
 cat("Población total", anio_pob, ":", format(sum(pob_mun$poblacion), big.mark = ".", decimal.mark = ","), "\n")
 
 # ---------- Valor agregado 2023 ----------
-# Precios del VA según el anexo (Cuadro 1): precios corrientes, base 2015,
+# Precios del VA según el anexo (Cuadro 1): VA a precios corrientes (serie con base 2015),
 # miles de millones de pesos. La columna 2024 es provisional (2024p) y no se
 # usa: el enunciado pide proyectar 2023 a 2024.
 va_mun <- va_raw %>%
