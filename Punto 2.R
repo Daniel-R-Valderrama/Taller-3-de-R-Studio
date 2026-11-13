@@ -335,8 +335,10 @@ registro_ibr <- data.frame(
   metodo         = "Web scraping dinámico (chromote, botón 'Vista tabla')",
   url            = url_ibr,
   fecha_consulta = format(fecha_consulta_ibr, "%d/%m/%Y %H:%M"),
-  unidad         = "[completar: según la página]",
-  convencion     = "[completar: según la página]",
+  # Unidad y convención: glosario del BanRep (https://www.banrep.gov.co/es/glosario/ibr)
+  # y ficha metodológica del IBR (BanRep / Asobancaria)
+  unidad         = "Porcentaje (%) nominal anual",
+  convencion     = "Tasa nominal base 360 (año de 360 días y mes de 30 días); el BanRep publica además la tasa efectiva",
   n_obs          = nrow(ibr_on),
   fecha_min      = format(min(ibr_on$fecha), "%d/%m/%Y"),
   fecha_max      = format(max(ibr_on$fecha), "%d/%m/%Y")
@@ -602,7 +604,9 @@ registro_sofr <- data.frame(
   url            = respuesta_sofr$url,
   fecha_consulta = format(fecha_consulta_sofr, "%d/%m/%Y %H:%M"),
   unidad         = "Porcentaje anual",
-  convencion     = "[completar: según la metodología de la Fed de Nueva York]",
+  # Convención: página "Additional Information about Reference Rates Administered by the
+  # New York Fed" (https://www.newyorkfed.org/markets/reference-rates/additional-information-about-reference-rates)
+  convencion     = "Actual/360 (días calendario reales sobre un año de 360 días); mediana ponderada por volumen (percentil 50) de repos overnight con garantía de Tesoros de EE. UU., redondeada al punto básico",
   n_obs          = nrow(sofr_on),
   fecha_min      = format(min(sofr_on$fecha), "%d/%m/%Y"),
   fecha_max      = format(max(sofr_on$fecha), "%d/%m/%Y")
@@ -912,6 +916,7 @@ if (!all(file.exists(archivos_doble))) {
 } else {
   cat("Verificación exitosa: gráficas de doble eje guardadas en", ruta_resultados, "\n")
 }
+
 # ---------- Para el punto 3 ----------
 ruta_app_datos <- file.path(ruta_taller, "app_shiny", "datos")
 dir.create(ruta_app_datos, showWarnings = FALSE, recursive = TRUE)
