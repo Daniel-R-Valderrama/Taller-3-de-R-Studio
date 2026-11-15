@@ -1760,8 +1760,8 @@ rm(ibr_recuperada, filas_antes)
 
 
 # Taller 3, Punto 3: aplicativo Shiny (pestañas A, B y C)
-# Ubicación: Taller 3/app_shiny/app.R  (los datos van en app_shiny/datos/)
-# Se ejecuta con el botón "Run App" de RStudio.
+# Los insumos se encuentran en la carpeta app_shiny/datos/.
+# Se ejecuta al llegar a shinyApp(ui = ui, server = server).
 
 # Paquetes vistos en clase: shiny, shinydashboard, plotly, DT, dplyr, sf, RColorBrewer
 # Funciones no vistas en clase: add_sf() y event_data() de plotly (mapa con clic)
@@ -1786,8 +1786,6 @@ ruta_app_datos <- paste0("C:/Users/", username,
 #username       <- Sys.getenv("USER")
 #ruta_app_datos <- paste0("/Users/", username, "/Documents/Maestría/R/Taller 3/Taller 3/app_shiny/datos")
 
-# Si la ruta no existe (por ejemplo, al publicar la app o en otro computador),
-# se usa la carpeta "datos" que está junto a app.R.
 if (!dir.exists(ruta_app_datos)) {
   ruta_app_datos <- "datos"
 }
@@ -1813,8 +1811,8 @@ color_ibr  <- "#1F5F99"
 fuente_tasas <- paste0("Fuente: Banco de la República, SUAMECA (serie 241, web scraping); ",
                        "Federal Reserve Bank of New York, Markets Data API. Cálculos propios.")
 
-# TEXTO DE LA PESTAÑA C: lo redacta el grupo (el enunciado prohíbe usar IA para esto).
-# Guía (no es el texto): ¿qué representa cada punto? ¿de qué fuentes y años salen
+# TEXTO DE LA PESTAÑA C
+# ¿qué representa cada punto? ¿de qué fuentes y años salen
 # el IDF, la población y el VA? ¿en qué unidades están? ¿por qué se usa escala
 # logarítmica? ¿qué relación buscan mostrar y qué muestra la correlación? ¿qué
 # cambia al filtrar por departamento? Escriban 4 a 6 líneas con sus palabras.
@@ -1854,6 +1852,7 @@ ui <- dashboardPage(
                            tags$ol(
                              tags$li("Haga clic en un departamento del mapa o elíjalo en la lista."),
                              tags$li("Verá su IDF departamental y los tres municipios con mayor IDF municipal."),
+                             tags$li("Para consultar el Archipiélago de San Andrés, Providencia y Santa Catalina, selecciónelo en la lista desplegable."),
                              tags$li("Pase el cursor sobre el mapa para ver el valor de cada departamento.")
                            ),
                            selectInput("dpto", "Departamento", choices = opciones_dpto)),
