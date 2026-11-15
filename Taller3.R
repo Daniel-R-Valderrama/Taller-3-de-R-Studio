@@ -6,7 +6,8 @@ rm(list = ls())
 # ==============================================================================
 
 # Si es la primera vez o tienen errores de versiones, NO instalen desde aquí:
-# corran primero el script 00_reinstalar_paquetes.R en una sesión nueva de R.
+# instalen los paquetes con install.packages() en una sesión nueva de R, antes
+# de correr este script.
 # CUIDADO: instalar un paquete que ya está cargado deja la instalación a medias.
 # CUIDADO: chromote controla Google Chrome, así que Chrome debe estar instalado.
 # CUIDADO: se cargan en el mismo orden de antes. Si dos paquetes tienen una
@@ -40,6 +41,14 @@ library(shiny)
 library(shinydashboard)
 library(DT)
 
+# CÓMO SE MARCA LO NO VISTO EN CLASE (aplica a este script y a app_shiny/app.R)
+# - Paquete no visto: se nombra en esta sección y cada línea que lo usa termina
+#   en  # [NO VISTO EN CLASE]
+# - Función no vista de un paquete que sí se vio: la línea lleva el comentario
+#   # Función no vista: <para qué sirve>
+# - formatC() y sprintf() (base R, formato de números y de texto) llevan el
+#   comentario "formatC: ..." o "sprintf: ..." en la línea donde se usan.
+
 # Paquetes no vistos en clase (Punto 1):
 #   readxl: lectura del Excel del IDF (DNP). openxlsx no lo puede abrir porque
 #   el archivo escribe sus etiquetas XML con prefijo "x:" y openxlsx responde
@@ -50,19 +59,17 @@ library(DT)
 # DIRECTORIO DE TRABAJO
 # ==============================================================================
 
-username <- Sys.getenv("USERNAME")     # usuario del sistema
+#username <- Sys.getenv("USERNAME")     # usuario del sistema
 
 
 # ajustarla a la ubicación de SU carpeta "Taller 3".
-ruta_taller <- paste0("C:/Users/", username,
-                      "/OneDrive/Escritorio/2026-2/R/Taller 3")
+#ruta_taller <- paste0("C:/Users/", username,
+ #                     "/OneDrive/Escritorio/2026-2/R/Taller 3")
 
 
 #Configuración MacOs
-#username <- Sys.getenv("USER")
-#ruta_taller <- paste0("/Users/", username, "/Taller 3")
-#Configuración MacOs (David)
-#ruta_taller <- paste0("/Users/", username, "/Documents/Maestría/R/Taller 3/Taller 3")
+username <- Sys.getenv("USER")
+ruta_taller <- paste0("/Users/", username, "/Documents/Maestría/R/Taller 3 def")
 
 setwd(ruta_taller)
 
@@ -90,11 +97,23 @@ if (dir.exists(ruta_bases) & dir.exists(ruta_resultados) & dir.exists(ruta_app_d
 # readxl::read_excel() los deja con espacios ("Código Entidad").
 
 # ---------- Archivos originales ----------
-arch_idf <- "ConsultaIDF_2024_IDF - Municipios_20261029181249.xlsx"   # DNP, IDF municipal 2024
+# CUIDADO: el DNP le pone al archivo la fecha y la hora de la descarga
+# (ConsultaIDF_2024_IDF - Municipios_AAAAMMDDHHMMSS.xlsx), así que el nombre
+# cambia en cada computador. Se busca por el inicio del nombre.
+arch_idf <- list.files(ruta_bases, pattern = "^ConsultaIDF.*Municipios.*\\.xlsx$")   # DNP, IDF municipal 2024
 arch_pob <- "PPED-AreaMun-2018-2042_VP.xlsx"                          # DANE, población municipal por área
 arch_va  <- "anex-PIBDep-ValorAgreMuni-2011-2024p.xlsx"               # DANE, VA municipal 2011-2024p
 carpeta_shp_dpto <- "MGN2025_DPTO_POLITICO"                           # DANE Geoportal, MGN 2025
 carpeta_shp_mpio <- "MGN2025_MPIO_GRAFICO"                            # DANE Geoportal, MGN 2025
+
+# Verificación Programática: hay un solo Excel del IDF municipal en la carpeta
+if (length(arch_idf) != 1) {
+  cat("Alerta: se encontraron", length(arch_idf), "archivos del IDF municipal en", ruta_bases,
+      "(debe haber uno solo)\n")
+} else {
+  cat("Verificación exitosa: IDF municipal en", arch_idf, "\n")
+}
+arch_idf <- arch_idf[1]                  # si hubiera varios, se usa el primero
 
 # ---------- Hojas y fila del encabezado ----------
 # IDF: hoja única; la fila 16 trae títulos de dimensiones y la 17 los encabezados.
@@ -596,9 +615,9 @@ class(mapa_dpto)                         # debe seguir siendo "sf"
 cortes_dpto <- getJenksBreaks(mapa_dpto$idf_dpto[!is.na(mapa_dpto$idf_dpto)], k = n_clases + 1)
 cortes_dpto
 
-etiquetas_dpto <- paste0(formatC(cortes_dpto[-length(cortes_dpto)], format = "f", digits = 1),   # formatC: límites de clase con un decimal
+etiquetas_dpto <- paste0(formatC(cortes_dpto[-length(cortes_dpto)], format = "f", digits = 1, decimal.mark = ","),   # formatC: límites de clase con un decimal y coma decimal
                          " - ",
-                         formatC(cortes_dpto[-1], format = "f", digits = 1))
+                         formatC(cortes_dpto[-1], format = "f", digits = 1, decimal.mark = ","))
 
 mapa_dpto <- mapa_dpto %>%
   mutate(idf_clase = cut(idf_dpto, breaks = cortes_dpto,
@@ -631,7 +650,10 @@ recuadro_pro_dpto <- crear_recuadro(mapa_dpto, caja_providencia,
 # ---------- Mapa ----------
 g_mapa_dpto <- ggplot(mapa_dpto) +
   geom_sf(aes(fill = idf_clase), color = "white", linewidth = 0.2) +
-  geom_text_repel(aes(geometry = geometry, label = idf_etiqueta),
+  # CUIDADO: el departamento 88 queda fuera del mapa principal (va en los
+  # recuadros); si se deja aquí, su etiqueta aparece suelta en el borde.
+  geom_text_repel(data = mapa_dpto %>% filter(cod_dpto != "88"),
+                  aes(geometry = geometry, label = idf_etiqueta),
                   stat = "sf_coordinates", size = 2.5, fontface = "bold",
                   min.segment.length = 0) +
   scale_fill_brewer(palette = "YlGnBu", name = "IDF departamental\n(cortes de Jenks)",
@@ -754,9 +776,9 @@ sum(is.na(mapa_mpio$idf))
 # ---------- Clases y mapa ----------
 cortes_mpio <- getJenksBreaks(mapa_mpio$idf[!is.na(mapa_mpio$idf)], k = n_clases + 1)
 
-etiquetas_mpio <- paste0(formatC(cortes_mpio[-length(cortes_mpio)], format = "f", digits = 1),   # formatC: límites de clase con un decimal
+etiquetas_mpio <- paste0(formatC(cortes_mpio[-length(cortes_mpio)], format = "f", digits = 1, decimal.mark = ","),   # formatC: límites de clase con un decimal y coma decimal
                          " - ",
-                         formatC(cortes_mpio[-1], format = "f", digits = 1))
+                         formatC(cortes_mpio[-1], format = "f", digits = 1, decimal.mark = ","))
 
 mapa_mpio <- mapa_mpio %>%
   mutate(idf_clase = cut(idf, breaks = cortes_mpio,
@@ -780,7 +802,8 @@ g_mapa_mpio <- ggplot(mapa_mpio_4326) +
   geom_sf(aes(fill = idf_clase), color = NA) +
   geom_sf(data = st_transform(shp_dpto, 4326), fill = NA, color = "grey30", linewidth = 0.2) +
   scale_fill_brewer(palette = "YlGnBu", name = "IDF municipal\n(cortes de Jenks)",
-                    na.value = "grey80", drop = FALSE) +
+                    na.value = "grey80", drop = FALSE,
+                    labels = function(x) ifelse(is.na(x), "Sin dato", x)) +   # la clase sin IDF se rotula "Sin dato" y no "NA"
   labs(title = "Índice de Desempeño Fiscal municipal, 2024",
        subtitle = paste0("Polígonos simplificados con tolerancia de ", dtol_mpio, " m; gris: sin dato"),
        x = NULL, y = NULL,
@@ -904,7 +927,8 @@ cat("\014")
 # ==============================================================================
 
 # Si es la primera vez o tienen errores de versiones, NO instalen desde aquí:
-# corran primero el script 00_reinstalar_paquetes.R en una sesión nueva de R.
+# instalen los paquetes con install.packages() en una sesión nueva de R, antes
+# de correr este script.
 # CUIDADO: chromote controla Google Chrome, así que Chrome debe estar instalado.
 
 # Los paquetes de este punto se cargan al inicio del script.
@@ -1194,9 +1218,11 @@ registro_ibr <- data.frame(
   url            = url_ibr,
   fecha_consulta = format(fecha_consulta_ibr, "%d/%m/%Y %H:%M"),
   # Unidad y convención: glosario del BanRep (https://www.banrep.gov.co/es/glosario/ibr)
-  # y ficha metodológica del IBR (BanRep / Asobancaria)
+  # y ficha metodológica del IBR (BanRep / Asobancaria). Conteo de días:
+  # Reglamento del IBR (Asobancaria, versión de septiembre de 2024), artículo 34:
+  # el plazo se cuenta en días calendario con base en 360 días.
   unidad         = "Porcentaje (%) nominal anual",
-  convencion     = "Tasa nominal base 360 (año de 360 días y mes de 30 días); el BanRep publica además la tasa efectiva",
+  convencion     = "Tasa nominal anual, base 360: días calendario sobre un año de 360 días (Reglamento del IBR, art. 34); el BanRep publica además la tasa efectiva",
   n_obs          = nrow(ibr_on),
   fecha_min      = format(min(ibr_on$fecha), "%d/%m/%Y"),
   fecha_max      = format(max(ibr_on$fecha), "%d/%m/%Y")
@@ -1242,15 +1268,21 @@ list.files(ruta_resultados, pattern = "^2_A_")
 fila_max <- ibr_on[which.max(ibr_on$ibr_pct), ]
 fila_min <- ibr_on[which.min(ibr_on$ibr_pct), ]
 
-# sprintf: tasa con 2 decimales y fecha en formato dd/mm/aaaa dentro del texto
-texto_extremos <- sprintf("Máximo: %.2f %% (%s). Mínimo: %.2f %% (%s).",
-                          fila_max$ibr_pct, format(fila_max$fecha, "%d/%m/%Y"),
-                          fila_min$ibr_pct, format(fila_min$fecha, "%d/%m/%Y"))
+# sprintf: arma el texto con la tasa y la fecha en formato dd/mm/aaaa
+# formatC: tasa con 2 decimales y coma decimal
+texto_extremos <- sprintf("Máximo: %s %% (%s). Mínimo: %s %% (%s).",
+                          formatC(fila_max$ibr_pct, format = "f", digits = 2, decimal.mark = ","),
+                          format(fila_max$fecha, "%d/%m/%Y"),
+                          formatC(fila_min$ibr_pct, format = "f", digits = 2, decimal.mark = ","),
+                          format(fila_min$fecha, "%d/%m/%Y"))
 texto_extremos
 
 # ---------- Gráfica estática ----------
 g_ibr_diaria <- ggplot(ibr_on, aes(x = fecha, y = ibr_pct)) +
-  geom_line(color = "#1F5F99", linewidth = 0.6) +
+  # Leyenda: como en el doble eje (BLOQUE 14), el color se asigna con un nombre
+  # dentro de aes() y scale_color_manual() le da el color a ese nombre.
+  geom_line(aes(color = "IBR overnight (tasa nominal anual)"), linewidth = 0.6) +
+  scale_color_manual(values = c("IBR overnight (tasa nominal anual)" = "#1F5F99")) +
   scale_x_date(date_breaks = "6 months", date_labels = "%b %Y") +   # Función no vista: marcas del eje de fechas cada 6 meses
   scale_y_continuous(labels = label_number(suffix = " %", decimal.mark = ",")) +
   labs(title    = "IBR overnight diaria",
@@ -1258,10 +1290,12 @@ g_ibr_diaria <- ggplot(ibr_on, aes(x = fecha, y = ibr_pct)) +
                          format(fecha_fin, "%d/%m/%Y"), ". ", texto_extremos),
        x        = "Fecha",
        y        = "IBR overnight nominal (%)",
+       color    = NULL,
        caption  = "Fuente: Banco de la República, SUAMECA (serie 241). Web scraping. Cálculos propios.") +
   theme_bw() +
-  theme(plot.title  = element_text(face = "bold"),
-        axis.text.x = element_text(angle = 45, hjust = 1))
+  theme(plot.title      = element_text(face = "bold"),
+        legend.position = "bottom",
+        axis.text.x     = element_text(angle = 45, hjust = 1))
 
 g_ibr_diaria
 
@@ -1278,7 +1312,7 @@ ibr_on_int <- ibr_on %>%
 g_ibr_int <- ggplot(ibr_on_int, aes(x = fecha, y = ibr_pct, text = text)) +
   geom_line(aes(group = 1), color = "#1F5F99", linewidth = 0.6) +
   scale_x_date(date_breaks = "6 months", date_labels = "%b %Y") +   # Función no vista: marcas del eje de fechas cada 6 meses
-  scale_y_continuous(labels = label_number(suffix = " %")) +
+  scale_y_continuous(labels = label_number(suffix = " %", decimal.mark = ",")) +
   labs(x = "Fecha",
        y = "IBR overnight nominal (%)") +
   theme_bw() +
@@ -1286,8 +1320,14 @@ g_ibr_int <- ggplot(ibr_on_int, aes(x = fecha, y = ibr_pct, text = text)) +
 
 # CUIDADO: ggplotly() no conserva el subtítulo ni el caption de ggplot. Se
 # agregan con layout(): el periodo debajo del título y la fuente como anotación.
+# CUIDADO: ggplotly() tampoco muestra leyenda cuando hay una sola serie. Se le
+# pone nombre a la serie con style() y se activa la leyenda en layout().
 p_ibr_diaria <- ggplotly(g_ibr_int, tooltip = "text") %>%
-  layout(title = list(text = paste0("<b>IBR overnight diaria</b>",
+  plotly::style(name = "IBR overnight (tasa nominal anual)",   # Función no vista: cambia atributos de la serie (su nombre en la leyenda)
+                showlegend = TRUE, traces = 1) %>%
+  layout(showlegend = TRUE,
+         legend = list(x = 0.02, y = 0.98),          # leyenda dentro del gráfico, arriba a la izquierda
+         title = list(text = paste0("<b>IBR overnight diaria</b>",
                                     "<br><sup>Días hábiles, ",
                                     format(fecha_inicio, "%d/%m/%Y"), " a ",
                                     format(fecha_fin, "%d/%m/%Y"), "</sup>")),
@@ -1514,15 +1554,20 @@ fila_min_sofr <- sofr_on[which.min(sofr_on$sofr_pct), ]
 
 # CUIDADO: la SOFR estuvo varios días seguidos en su mínimo (2020-2021);
 # which.min() devuelve el PRIMER día en que se alcanzó.
-# sprintf: tasa con 2 decimales y fecha en formato dd/mm/aaaa dentro del texto
-texto_extremos_sofr <- sprintf("Máximo: %.2f %% (%s). Mínimo: %.2f %% (primera vez: %s).",
-                               fila_max_sofr$sofr_pct, format(fila_max_sofr$fecha, "%d/%m/%Y"),
-                               fila_min_sofr$sofr_pct, format(fila_min_sofr$fecha, "%d/%m/%Y"))
+# sprintf: arma el texto con la tasa y la fecha en formato dd/mm/aaaa
+# formatC: tasa con 2 decimales y coma decimal
+texto_extremos_sofr <- sprintf("Máximo: %s %% (%s). Mínimo: %s %% (primera vez: %s).",
+                               formatC(fila_max_sofr$sofr_pct, format = "f", digits = 2, decimal.mark = ","),
+                               format(fila_max_sofr$fecha, "%d/%m/%Y"),
+                               formatC(fila_min_sofr$sofr_pct, format = "f", digits = 2, decimal.mark = ","),
+                               format(fila_min_sofr$fecha, "%d/%m/%Y"))
 texto_extremos_sofr
 
 # ---------- Gráfica estática ----------
 g_sofr_diaria <- ggplot(sofr_on, aes(x = fecha, y = sofr_pct)) +
-  geom_line(color = color_sofr, linewidth = 0.6) +
+  # Leyenda: mismo patrón de la gráfica diaria de la IBR
+  geom_line(aes(color = "SOFR overnight (tasa anual)"), linewidth = 0.6) +
+  scale_color_manual(values = c("SOFR overnight (tasa anual)" = color_sofr)) +
   scale_x_date(date_breaks = "6 months", date_labels = "%b %Y") +   # Función no vista: marcas del eje de fechas cada 6 meses
   scale_y_continuous(labels = label_number(suffix = " %", decimal.mark = ",")) +
   labs(title    = "SOFR overnight diaria",
@@ -1530,10 +1575,12 @@ g_sofr_diaria <- ggplot(sofr_on, aes(x = fecha, y = sofr_pct)) +
                          format(fecha_fin, "%d/%m/%Y"), ". ", texto_extremos_sofr),
        x        = "Fecha",
        y        = "SOFR overnight, tasa anual (%)",
+       color    = NULL,
        caption  = "Fuente: Federal Reserve Bank of New York, Markets Data API. Cálculos propios.") +
   theme_bw() +
-  theme(plot.title  = element_text(face = "bold"),
-        axis.text.x = element_text(angle = 45, hjust = 1))
+  theme(plot.title      = element_text(face = "bold"),
+        legend.position = "bottom",
+        axis.text.x     = element_text(angle = 45, hjust = 1))
 
 g_sofr_diaria
 
@@ -1550,7 +1597,7 @@ sofr_on_int <- sofr_on %>%
 g_sofr_int <- ggplot(sofr_on_int, aes(x = fecha, y = sofr_pct, text = text)) +
   geom_line(aes(group = 1), color = color_sofr, linewidth = 0.6) +
   scale_x_date(date_breaks = "6 months", date_labels = "%b %Y") +   # Función no vista: marcas del eje de fechas cada 6 meses
-  scale_y_continuous(labels = label_number(suffix = " %")) +
+  scale_y_continuous(labels = label_number(suffix = " %", decimal.mark = ",")) +
   labs(x = "Fecha",
        y = "SOFR overnight, tasa anual (%)") +
   theme_bw() +
@@ -1558,8 +1605,14 @@ g_sofr_int <- ggplot(sofr_on_int, aes(x = fecha, y = sofr_pct, text = text)) +
 
 # CUIDADO: ggplotly() no conserva el subtítulo ni el caption de ggplot. Se
 # agregan con layout(): el periodo debajo del título y la fuente como anotación.
+# CUIDADO: igual que en la IBR, se le pone nombre a la serie con style() y se
+# activa la leyenda en layout().
 p_sofr_diaria <- ggplotly(g_sofr_int, tooltip = "text") %>%
-  layout(title = list(text = paste0("<b>SOFR overnight diaria</b>",
+  plotly::style(name = "SOFR overnight (tasa anual)",          # Función no vista: cambia atributos de la serie (su nombre en la leyenda)
+                showlegend = TRUE, traces = 1) %>%
+  layout(showlegend = TRUE,
+         legend = list(x = 0.02, y = 0.98),          # leyenda dentro del gráfico, arriba a la izquierda
+         title = list(text = paste0("<b>SOFR overnight diaria</b>",
                                     "<br><sup>Días hábiles de EE. UU., ",
                                     format(fecha_inicio, "%d/%m/%Y"), " a ",
                                     format(fecha_fin, "%d/%m/%Y"), "</sup>")),
@@ -1788,450 +1841,31 @@ rm(ibr_recuperada, filas_antes)
 
 
 # Taller 3, Punto 3: aplicativo Shiny (pestañas A, B y C)
-# Los insumos se encuentran en la carpeta app_shiny/datos/.
-# Se ejecuta al llegar a shinyApp(ui = ui, server = server).
+# ==============================================================================
+# El código del aplicativo está en app_shiny/app.R. Lee sus insumos de
+# app_shiny/datos/, que se generan en los puntos 1 y 2 de este script.
+# Se puede abrir de dos formas:
+# - corriendo la línea de runApp() al final de este script, o
+# - abriendo app_shiny/app.R en RStudio y usando el botón "Run App" (no hace
+#   falta volver a correr los puntos 1 y 2 si app_shiny/datos/ ya existe).
+# ==============================================================================
 
-# Paquetes vistos en clase: shiny, shinydashboard, plotly, DT, dplyr, sf, RColorBrewer
-# (se cargan al inicio del script)
-# Funciones no vistas en clase: add_sf() y event_data() de plotly (mapa con clic)
+# Los paquetes de este punto se cargan al inicio del script y también en app.R.
+# Paquetes no vistos en clase: ninguno
+# Funciones no vistas en clase: están en app.R (add_sf() y event_data() de plotly)
 
-# =============================================================================
-# DATOS (generados por los scripts de los puntos 1 y 2)
-# =============================================================================
-# ruta_app_datos se define al inicio del script (DIRECTORIO DE TRABAJO).
-# Respaldo si la app se corre sola desde la carpeta app_shiny/:
-if (!dir.exists(ruta_app_datos)) {
-  ruta_app_datos <- "datos"
+ruta_app <- file.path(ruta_taller, "app_shiny")
+
+# Verificación Programática: existen el app.R y los seis insumos de la app
+archivos_app <- c(file.path(ruta_app, "app.R"),
+                  file.path(ruta_app_datos, c("mapa_dpto.rds", "base_mun.rds", "cortes_dpto.rds",
+                                              "ibr_on.rds", "sofr_on.rds", "tasas_mensual.rds")))
+if (!all(file.exists(archivos_app))) {
+  cat("Alerta: falta", basename(archivos_app[!file.exists(archivos_app)]), "\n")
+} else {
+  cat("Verificación exitosa: app.R y sus seis insumos están en", ruta_app, "\n")
 }
 
-archivos_datos <- c("mapa_dpto.rds", "base_mun.rds", "cortes_dpto.rds",
-                    "ibr_on.rds", "sofr_on.rds", "tasas_mensual.rds")
-faltantes <- archivos_datos[!file.exists(file.path(ruta_app_datos, archivos_datos))]
-if (length(faltantes) > 0) {
-  stop("Faltan archivos en ", ruta_app_datos, ": ", paste(faltantes, collapse = ", "),
-       ". Corran primero los scripts de los puntos 1 y 2.")
-}
-
-mapa        <- readRDS(file.path(ruta_app_datos, "mapa_dpto.rds"))      # sf, EPSG 4326
-base_mun    <- readRDS(file.path(ruta_app_datos, "base_mun.rds"))
-cortes_dpto <- readRDS(file.path(ruta_app_datos, "cortes_dpto.rds"))
-ibr_on      <- readRDS(file.path(ruta_app_datos, "ibr_on.rds"))         # fecha, ibr_pct
-sofr_on     <- readRDS(file.path(ruta_app_datos, "sofr_on.rds"))        # fecha, sofr_pct
-tasas_mens  <- readRDS(file.path(ruta_app_datos, "tasas_mensual.rds"))  # mes, sofr_pct, ibr_pct
-
-color_sofr <- "#2E8B57"
-color_ibr  <- "#1F5F99"
-
-fuente_tasas <- paste0("Fuente: Banco de la República, SUAMECA (serie 241, web scraping); ",
-                       "Federal Reserve Bank of New York, Markets Data API. Cálculos propios.")
-
-# TEXTO DE LA PESTAÑA C
-# ¿qué representa cada punto? ¿de qué fuentes y años salen
-# el IDF, la población y el VA? ¿en qué unidades están? ¿por qué se usa escala
-# logarítmica? ¿qué relación buscan mostrar y qué muestra la correlación? ¿qué
-# cambia al filtrar por departamento? Escriban 4 a 6 líneas con sus palabras.
-texto_explicacion_c <- "[ESCRIBAN AQUÍ la explicación de los datos y de lo que muestra la gráfica.]"
-
-# Formato con coma decimal
-fmt <- function(x, d = 1) {
-  ifelse(is.na(x), "sin dato",
-         format(round(x, d), nsmall = d, decimal.mark = ",", trim = TRUE))
-}
-
-opciones_dpto <- c("Seleccione un departamento..." = "",
-                   setNames(mapa$cod_dpto, mapa$nombre_dpto)[order(mapa$nombre_dpto)])
-
-# =============================================================================
-# INTERFAZ
-# =============================================================================
-ui <- dashboardPage(
-  dashboardHeader(title = "Taller 3"),
-  
-  dashboardSidebar(
-    sidebarMenu(
-      menuItem("A. Mapa del IDF",          tabName = "tab_a", icon = icon("map")),
-      menuItem("B. IBR, SOFR y devaluación", tabName = "tab_b", icon = icon("chart-line")),
-      menuItem("C. Diseño libre",          tabName = "tab_c", icon = icon("palette"))
-    )
-  ),
-  
-  dashboardBody(
-    tabItems(
-      
-      # ------------------------------ A ------------------------------
-      tabItem(tabName = "tab_a",
-              fluidRow(
-                column(width = 4,
-                       box(title = "Cómo usar", status = "info", solidHeader = TRUE, width = 12,
-                           tags$ol(
-                             tags$li("Haga clic en un departamento del mapa o elíjalo en la lista."),
-                             tags$li("Verá su IDF departamental y los tres municipios con mayor IDF municipal."),
-                             tags$li("Para consultar el Archipiélago de San Andrés, Providencia y Santa Catalina, selecciónelo en la lista desplegable."),
-                             tags$li("Pase el cursor sobre el mapa para ver el valor de cada departamento.")
-                           ),
-                           selectInput("dpto", "Departamento", choices = opciones_dpto)),
-                       valueBoxOutput("vb_dpto", width = 12),
-                       box(title = "Tres municipios con mayor IDF municipal",
-                           status = "primary", solidHeader = TRUE, width = 12,
-                           DTOutput("tabla_top3"),
-                           uiOutput("nota_top3"),
-                           hr(),
-                           helpText("IDF departamental: media ponderada del IDF municipal, con ponderador ",
-                                    "población 2024 × VA 2024 proyectado. IDF municipal: valor oficial del DNP, 2024."))
-                ),
-                column(width = 8,
-                       box(title = "IDF artificial por departamento, 2024",
-                           status = "primary", solidHeader = TRUE, width = 12,
-                           plotlyOutput("mapa", height = 650))
-                )
-              )
-      ),
-      
-      # ------------------------------ B ------------------------------
-      tabItem(tabName = "tab_b",
-              fluidRow(
-                valueBoxOutput("vb_ibr", width = 4),
-                valueBoxOutput("vb_sofr", width = 4),
-                valueBoxOutput("vb_pi", width = 4)
-              ),
-              fluidRow(
-                column(width = 4,
-                       box(title = "Cómo usar", status = "info", solidHeader = TRUE, width = 12,
-                           tags$ol(
-                             tags$li("Elija la frecuencia del gráfico (eje izquierdo: SOFR; eje derecho: IBR)."),
-                             tags$li("Escriba una fecha con formato AAAA-MM-DD, entre 2020-01-01 y 2025-10-31."),
-                             tags$li("Arriba aparecen la IBR ON, la SOFR ON y la devaluación implícita de ese día.")
-                           ),
-                           radioButtons("frecuencia", "Frecuencia del gráfico",
-                                        choices = c("Promedio mensual" = "mensual",
-                                                    "Diaria (días hábiles)" = "diaria")),
-                           dateInput("fecha", "Fecha de consulta", value = as.Date("2025-10-31"),
-                                     min = as.Date("2020-01-01"), max = as.Date("2025-10-31"),
-                                     format = "yyyy-mm-dd", language = "es"),
-                           uiOutput("aviso_fecha"),
-                           hr(),
-                           helpText("Fórmula: π = (1 + i_d) / (1 + i_e) − 1, con i_d = IBR ON e i_e = SOFR ON, ",
-                                    "en decimales (porcentaje ÷ 100). Ambas son tasas anuales, así que π es una ",
-                                    "tasa de devaluación implícita ANUAL, expresada en %. Supuesto: la IBR de la ",
-                                    "serie 241 es nominal base 360 y la SOFR es Actual/360; se tratan como comparables."))
-                ),
-                column(width = 8,
-                       box(title = "IBR ON y SOFR ON", status = "primary", solidHeader = TRUE, width = 12,
-                           plotlyOutput("grafico_tasas", height = 580))
-                )
-              )
-      ),
-      
-      # ------------------------------ C ------------------------------
-      tabItem(tabName = "tab_c",
-              fluidRow(
-                column(width = 4,
-                       box(title = "Controles", status = "info", solidHeader = TRUE, width = 12,
-                           radioButtons("x_c", "Variable del eje horizontal",
-                                        choices = c("Población 2024 (personas)" = "poblacion",
-                                                    "VA 2024 proyectado (miles de millones de pesos corrientes)" = "va_2024")),
-                           selectizeInput("dptos_c", "Departamentos (vacío = todos)",
-                                          choices = sort(unique(base_mun$nombre_dpto)), multiple = TRUE,
-                                          options = list(placeholder = "Todos los departamentos")),
-                           checkboxInput("log_c", "Escala logarítmica en el eje horizontal", TRUE),
-                           checkboxInput("tend_c", "Mostrar línea de tendencia lineal", FALSE)),
-                       box(title = "¿Qué muestra esta gráfica?", status = "warning",
-                           solidHeader = TRUE, width = 12,
-                           p(texto_explicacion_c))
-                ),
-                column(width = 8,
-                       box(title = "IDF municipal y tamaño económico y poblacional",
-                           status = "primary", solidHeader = TRUE, width = 12,
-                           plotlyOutput("grafico_c", height = 600))
-                )
-              )
-      )
-    )
-  )
-)
-
-# =============================================================================
-# SERVIDOR
-# =============================================================================
-server <- function(input, output, session) {
-  
-  # ------------------------------ A ------------------------------
-  # Color de cada departamento según su clase de Jenks (misma paleta del punto 1)
-  pal_clases <- brewer.pal(length(cortes_dpto) - 1, "YlGnBu")
-  mapa <- mapa %>%
-    mutate(color_relleno = ifelse(is.na(idf_clase), "#CCCCCC", pal_clases[as.integer(idf_clase)]),
-           clase_txt = ifelse(is.na(idf_clase), "Sin dato", as.character(idf_clase)),
-           texto = paste0("<b>", nombre_dpto, "</b><br>IDF departamental: ", fmt(idf_dpto))) %>%
-    arrange(is.na(idf_clase), as.integer(idf_clase)) %>%     # ordena la leyenda por clase
-    mutate(primera_clase = !duplicated(clase_txt))           # una sola entrada de leyenda por clase
-  
-  # Mapa base: un trazo por departamento (split). El código del departamento va
-  # en "meta" para poder identificar el trazo después.
-  mapa_base <- plot_ly(source = "mapa") %>%
-    add_sf(data = mapa, split = ~cod_dpto, meta = ~cod_dpto,
-           fillcolor = ~color_relleno, line = list(color = "white", width = 0.6),
-           text = ~texto, hoverinfo = "text", hoveron = "fills")
-  
-  # CUIDADO: con split, los atributos mapeados con ~ se repiten en cada vértice
-  # del polígono, y la leyenda necesita UN valor por trazo. Por eso el nombre, el
-  # grupo y la visibilidad en la leyenda se asignan aquí, trazo por trazo, después
-  # de construir el gráfico. Así la leyenda muestra una entrada por clase de Jenks
-  # (y al hacer clic en ella se ocultan o muestran sus departamentos).
-  construir_mapa <- function(p) {
-    b <- plotly_build(p)
-    for (i in seq_along(b$x$data)) {
-      cod <- if (is.null(b$x$data[[i]]$meta)) NA_character_ else as.character(b$x$data[[i]]$meta)[1]
-      j <- match(cod, mapa$cod_dpto)
-      if (!is.na(j)) {
-        b$x$data[[i]]$meta        <- cod
-        b$x$data[[i]]$name        <- mapa$clase_txt[j]
-        b$x$data[[i]]$legendgroup <- mapa$clase_txt[j]
-        b$x$data[[i]]$showlegend  <- mapa$primera_clase[j]
-        b$x$data[[i]]$legendrank  <- match(mapa$clase_txt[j], c(levels(mapa$idf_clase), "Sin dato"))
-      }
-    }
-    b
-  }
-  
-  # Código del departamento de cada trazo: sirve para saber cuál se tocó,
-  # porque el clic solo informa el número de trazo
-  nombres_trazos <- vapply(construir_mapa(mapa_base)$x$data,
-                           function(tr) if (is.null(tr$meta)) NA_character_ else as.character(tr$meta)[1],
-                           character(1))
-  
-  output$mapa <- renderPlotly({
-    p <- mapa_base
-    # Contorno rojo sobre el departamento elegido
-    if (input$dpto != "") {
-      p <- p %>%
-        add_sf(data = mapa[mapa$cod_dpto == input$dpto, ],
-               fillcolor = "rgba(0,0,0,0)", line = list(color = "#d7301f", width = 3),
-               hoverinfo = "skip", showlegend = FALSE, name = "seleccion")
-    }
-    p <- p %>%
-      layout(xaxis = list(visible = FALSE),
-             yaxis = list(visible = FALSE, scaleanchor = "x", scaleratio = 1),
-             legend = list(title = list(text = "<b>IDF departamental</b><br>(cortes de Jenks)")),
-             margin = list(l = 0, r = 0, t = 10, b = 0)) %>%
-      event_register("plotly_click")
-    construir_mapa(p)
-  })
-  
-  # Clic en el mapa -> actualiza la lista de departamentos
-  observeEvent(event_data("plotly_click", source = "mapa"), {
-    ck  <- event_data("plotly_click", source = "mapa")
-    idx <- ck$curveNumber[1] + 1          # plotly cuenta los trazos desde 0
-    if (!is.na(idx) && idx <= length(nombres_trazos)) {
-      id <- nombres_trazos[idx]
-      if (!is.na(id) && id %in% mapa$cod_dpto) {
-        updateSelectInput(session, "dpto", selected = id)
-      }
-    }
-  })
-  
-  # reactive: datos del departamento elegido (se calculan una vez)
-  fila_dpto <- reactive({
-    req(input$dpto != "")
-    st_drop_geometry(mapa[mapa$cod_dpto == input$dpto, ])
-  })
-  
-  mun_dpto <- reactive({
-    req(input$dpto != "")
-    base_mun %>% filter(cod_dpto == input$dpto, !is.na(idf))
-  })
-  
-  output$vb_dpto <- renderValueBox({
-    if (input$dpto == "") {
-      valueBox("—", "Índice departamental: elija un departamento",
-               icon = icon("map-location-dot"), color = "light-blue")
-    } else {
-      d <- fila_dpto()
-      valueBox(fmt(d$idf_dpto, 2),
-               paste0("ÍNDICE DEPARTAMENTAL · ", d$nombre_dpto,
-                      " (media ponderada de ", d$n_mpios, " municipio(s))"),
-               icon = icon("chart-pie"), color = "blue")
-    }
-  })
-  
-  output$tabla_top3 <- renderDT({
-    req(input$dpto != "")
-    top3 <- mun_dpto() %>%
-      arrange(desc(idf)) %>%
-      slice_head(n = 3) %>%
-      transmute(Puesto = row_number(),
-                Municipio = nombre_mpio,
-                `IDF municipal` = fmt(idf, 2))
-    datatable(top3, rownames = FALSE,
-              options = list(dom = "t", paging = FALSE, ordering = FALSE))
-  })
-  
-  output$nota_top3 <- renderUI({
-    req(input$dpto != "")
-    n <- nrow(mun_dpto())
-    if (n == 0) {
-      tags$em("Este departamento no tiene municipios con IDF municipal.")
-    } else if (n < 3) {
-      tags$em(paste0("Solo hay ", n, " municipio(s) con IDF en este departamento."))
-    }
-  })
-  
-  # ------------------------------ B ------------------------------
-  # reactive: tasas de la fecha elegida (las usan las tarjetas y el aviso)
-  tasas_fecha <- reactive({
-    f <- input$fecha
-    if (is.null(f) || is.na(f)) {
-      return(list(valida = FALSE))
-    }
-    list(valida = TRUE, f = f,
-         i = ibr_on$ibr_pct[ibr_on$fecha == f],
-         s = sofr_on$sofr_pct[sofr_on$fecha == f])
-  })
-  
-  output$vb_ibr <- renderValueBox({
-    t <- tasas_fecha()
-    if (!t$valida || length(t$i) == 0) {
-      valueBox("Sin dato", "IBR ON", icon = icon("triangle-exclamation"), color = "yellow")
-    } else {
-      valueBox(paste0(fmt(t$i, 3), " %"), "IBR ON (nominal anual)",
-               icon = icon("percent"), color = "blue")
-    }
-  })
-  
-  output$vb_sofr <- renderValueBox({
-    t <- tasas_fecha()
-    if (!t$valida || length(t$s) == 0) {
-      valueBox("Sin dato", "SOFR ON", icon = icon("triangle-exclamation"), color = "yellow")
-    } else {
-      valueBox(paste0(fmt(t$s, 2), " %"), "SOFR ON (anual)",
-               icon = icon("percent"), color = "green")
-    }
-  })
-  
-  output$vb_pi <- renderValueBox({
-    t <- tasas_fecha()
-    if (!t$valida || length(t$i) == 0 || length(t$s) == 0) {
-      valueBox("No calculable", "Devaluación implícita π", icon = icon("ban"), color = "red")
-    } else {
-      pi_val <- ((1 + t$i / 100) / (1 + t$s / 100) - 1) * 100
-      valueBox(paste0(fmt(pi_val, 2), " %"), "Devaluación implícita π (anual)",
-               icon = icon("arrow-trend-up"), color = "purple")
-    }
-  })
-  
-  output$aviso_fecha <- renderUI({
-    t <- tasas_fecha()
-    if (!t$valida) {
-      return(div(style = "color:#b30000;", "Fecha no válida. Escríbala con formato AAAA-MM-DD."))
-    }
-    faltan <- c(if (length(t$i) == 0) "IBR ON (no hay publicación en Colombia ese día)",
-                if (length(t$s) == 0) "SOFR ON (no hay publicación en EE. UU. ese día)")
-    if (length(faltan) > 0) {
-      div(style = "background:#fff3cd; padding:10px; border-left:5px solid #e0a800;",
-          strong(format(t$f, "%d/%m/%Y"), ": no se puede calcular π. Falta:"),
-          tags$ul(lapply(faltan, tags$li)),
-          "Pruebe con otro día hábil en ambos países.")
-    }
-  })
-  
-  output$grafico_tasas <- renderPlotly({
-    if (input$frecuencia == "mensual") {
-      x_s <- tasas_mens$mes;  y_s <- tasas_mens$sofr_pct
-      x_i <- tasas_mens$mes;  y_i <- tasas_mens$ibr_pct
-      titulo <- "IBR overnight y SOFR overnight: promedio mensual"
-      ht_s <- "<b>SOFR ON</b><br>Mes: %{x|%b %Y}<br>Promedio: %{y:.2f} %<extra></extra>"
-      ht_i <- "<b>IBR ON</b><br>Mes: %{x|%b %Y}<br>Promedio: %{y:.3f} %<extra></extra>"
-    } else {
-      x_s <- sofr_on$fecha;   y_s <- sofr_on$sofr_pct
-      x_i <- ibr_on$fecha;    y_i <- ibr_on$ibr_pct
-      titulo <- "IBR overnight y SOFR overnight: diaria"
-      ht_s <- "<b>SOFR ON</b><br>%{x|%d/%m/%Y}<br>%{y:.2f} %<extra></extra>"
-      ht_i <- "<b>IBR ON</b><br>%{x|%d/%m/%Y}<br>%{y:.3f} %<extra></extra>"
-    }
-    
-    t <- tasas_fecha()
-    linea <- if (t$valida) {
-      list(list(type = "line", xref = "x", yref = "paper",
-                x0 = as.character(t$f), x1 = as.character(t$f), y0 = 0, y1 = 1,
-                line = list(color = "gray40", dash = "dash", width = 1)))
-    } else list()
-    
-    plot_ly() %>%
-      add_trace(x = x_s, y = y_s, name = "SOFR ON (eje izquierdo)",
-                type = "scatter", mode = "lines",
-                line = list(color = color_sofr, width = 2), hovertemplate = ht_s) %>%
-      add_trace(x = x_i, y = y_i, name = "IBR ON (eje derecho)",
-                type = "scatter", mode = "lines", yaxis = "y2",
-                line = list(color = color_ibr, width = 2), hovertemplate = ht_i) %>%
-      layout(title  = list(text = paste0("<b>", titulo, "</b><br><sup>Periodo: 01/01/2020 a 31/10/2025. ",
-                                         "Línea punteada: fecha consultada.</sup>")),
-             xaxis  = list(title = "Fecha"),
-             yaxis  = list(title = list(text = "SOFR ON: tasa anual (%)", font = list(color = color_sofr)),
-                           ticksuffix = " %"),
-             yaxis2 = list(title = list(text = "IBR ON: tasa nominal anual (%)", font = list(color = color_ibr)),
-                           ticksuffix = " %", overlaying = "y", side = "right"),
-             shapes = linea,
-             legend = list(orientation = "h", x = 0, y = -0.2),
-             margin = list(r = 80, b = 170),
-             annotations = list(list(text = gsub('; ', ';<br>', fuente_tasas), x = 0, y = -0.42,
-                                     xref = "paper", yref = "paper", showarrow = FALSE,
-                                     xanchor = "left", font = list(size = 10, color = "gray"))))
-  })
-  
-  # ------------------------------ C ------------------------------
-  # reactive: municipios que pasan los filtros (los usa el gráfico)
-  datos_c <- reactive({
-    d <- base_mun %>% filter(!is.na(idf), !is.na(poblacion), !is.na(va_2024))
-    if (length(input$dptos_c) > 0) {
-      d <- d %>% filter(nombre_dpto %in% input$dptos_c)
-    }
-    d$x <- d[[input$x_c]]
-    if (input$log_c) d <- d %>% filter(x > 0)     # el logaritmo no admite ceros
-    d
-  })
-  
-  output$grafico_c <- renderPlotly({
-    d <- datos_c()
-    shiny::validate(shiny::need(nrow(d) > 2, "Hay muy pocos municipios con los filtros elegidos."))
-    
-    etiqueta_x <- if (input$x_c == "poblacion") "Población 2024 (personas)" else
-      "VA 2024 proyectado (miles de millones de pesos corrientes)"
-    d$texto <- paste0("<b>", d$nombre_mpio, "</b> (", d$nombre_dpto, ")",
-                      "<br>IDF municipal: ", fmt(d$idf, 2),
-                      "<br>", etiqueta_x, ": ",
-                      format(round(d$x, 1), big.mark = ".", decimal.mark = ",", trim = TRUE))
-    
-    x_corr <- if (input$log_c) log10(d$x) else d$x
-    corr   <- cor(x_corr, d$idf)
-    
-    p <- plot_ly(d, x = ~x, y = ~idf, type = "scatter", mode = "markers",
-                 text = ~texto, hoverinfo = "text",
-                 marker = list(color = "#1F5F99", opacity = 0.6, size = 7),
-                 name = "Municipios")
-    
-    if (input$tend_c) {
-      modelo <- lm(d$idf ~ x_corr)
-      o <- order(d$x)
-      p <- p %>%
-        add_lines(x = d$x[o], y = fitted(modelo)[o], name = "Tendencia lineal",
-                  line = list(color = "#d7301f", width = 2), hoverinfo = "skip", inherit = FALSE)
-    }
-    
-    p %>%
-      layout(title = list(text = paste0("<b>IDF municipal 2024 según ", tolower(substr(etiqueta_x, 1, 1)),
-                                        substr(etiqueta_x, 2, nchar(etiqueta_x)), "</b><br><sup>",
-                                        nrow(d), " municipios. Correlación de Pearson",
-                                        if (input$log_c) " (con log10 del eje x)" else "", ": ",
-                                        fmt(corr, 2), "</sup>")),
-             xaxis = list(title = etiqueta_x, type = if (input$log_c) "log" else "linear"),
-             yaxis = list(title = "IDF municipal (puntos)"),
-             legend = list(orientation = "h", x = 0, y = -0.2),
-             margin = list(b = 200),
-             annotations = list(list(
-               text = paste0("Fuente: DNP (IDF 2024), DANE (proyecciones de población y VA municipal 2023).<br>",
-                             "VA 2024 proyectado con la tasa del PIB nominal. Cálculos propios."),
-               x = 0, y = -0.42, xref = "paper", yref = "paper", showarrow = FALSE,
-               xanchor = "left", font = list(size = 10, color = "gray"))))
-  })
-}
-
-shinyApp(ui = ui, server = server)
+# CUIDADO: mientras la app está abierta la consola de R queda ocupada. Para
+# cerrarla, cierre la ventana de la app o use el botón de stop de la consola.
+runApp(ruta_app)                         # Función no vista: abre la app que está en la carpeta indicada

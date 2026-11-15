@@ -18,7 +18,7 @@ output:
 # ==============================================================================
 # CUIDADO (Clase 9): el documento corre en una sesión NUEVA. Todo lo que
 # necesite (paquetes y datos) se carga aquí. Antes de tejerlo hay que correr
-# Taller_3.R para que existan los archivos de Resultados/ y app_shiny/datos/.
+# Taller3.R para que existan los archivos de Resultados/ y app_shiny/datos/.
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 
 library(dplyr)       # manipulación de datos
@@ -26,12 +26,12 @@ library(openxlsx)    # lectura de las tablas exportadas en Excel
 library(knitr)       # kable() para tablas
 
 #Configuración Windows
-username    <- Sys.getenv("USERNAME")
-ruta_taller <- paste0("C:/Users/", username, "/OneDrive/Escritorio/2026-2/R/Taller 3")
+#username    <- Sys.getenv("USERNAME")
+#ruta_taller <- paste0("C:/Users/", username, "/OneDrive/Escritorio/2026-2/R/Taller 3")
 
 #Configuración MacOs (David)
-#username    <- Sys.getenv("USER")
-#ruta_taller <- paste0("/Users/", username, "/Documents/Maestría/R/Taller 3/Taller 3")
+username <- Sys.getenv("USER")
+ruta_taller <- paste0("/Users/", username, "/Documents/Maestría/R/Taller 3 def")
 
 knitr::opts_knit$set(root.dir = ruta_taller)
 
@@ -42,6 +42,14 @@ fecha_inicio <- as.Date("2020-01-01")   # inicio del periodo pedido
 fecha_fin    <- as.Date("2025-10-31")   # fin del periodo pedido
 tasa_pib_2024 <- 7.95                   # crecimiento % del PIB nominal 2024 (BLOQUE 5 del Punto 1)
 fechas_contraste <- as.Date(c("2020-01-02", "2023-06-30", "2025-10-31"))   # fechas revisadas en la fuente
+
+# Valores que el grupo leyó en la página oficial de cada fuente para las fechas
+# de contraste. Se digitan a mano: no salen de la extracción, sirven para compararla.
+contraste_fuente <- data.frame(
+  fecha       = fechas_contraste,
+  ibr_fuente  = c(4.114, 12.270, 8.730),   # SUAMECA, serie 241 (Vista tabla)
+  sofr_fuente = c(1.54, 5.09, 4.22)        # Fed de Nueva York, página de la SOFR
+)
 ```
 
 # Punto 1. Datos geoespaciales
@@ -108,11 +116,11 @@ kable(base_mun %>%
 
 **Comentarios del grupo (llaves y municipios que no entran):**
 
-> La Tabla 1.A.1 muestra que los 1.103 municipios de la base del IDF del DNP encontraron pareja en las bases de población 2024 y valor agregado 2023 del DANE, así que ninguno quedó sin alguno de los tres datos. La Tabla 1.A.2 hace el cruce en sentido contrario: hay 20 códigos que están en las bases del DANE pero no tienen IDF, por lo que no entran al cálculo. Ninguno corresponde a un municipio. Son 19 áreas no municipalizadas (9 de Amazonas, 7 de Guainía y 3 de Vaupés) y San Andrés, que no cuenta como municipio porque está bajo la jurisdicción directa de la gobernación. Llama la atención Mapiripana (94663), que aparece con población 0 y valor agregado 0. En la Tabla 1.A.3 vemos que Nuevo Belén de Bajirá sí tiene IDF, pero su valor agregado es 0. Por eso su ponderador es 0 y no influye en el IDF del Chocó. La razón más probable es que el municipio se creó en diciembre de 2023 y el DANE todavía no le reporta un valor agregado propio.
+> La Tabla 1.A.1 muestra que los 1.103 municipios de la base del IDF del DNP encontraron pareja en las bases de población 2024 y valor agregado 2023 del DANE, así que ninguno quedó sin alguno de los tres datos. La Tabla 1.A.2 hace el cruce en sentido contrario: hay 20 códigos que están en las bases del DANE pero no tienen IDF, por lo que no entran al cálculo. Ninguno corresponde a un municipio. Son 19 áreas no municipalizadas (9 de Amazonas, 7 de Guainía y 3 de Vaupés) y San Andrés, que no cuenta como municipio porque está bajo la jurisdicción directa de la gobernación. Llama la atención Mapiripana (94663), que aparece con población 0 y valor agregado 0. En la Tabla 1.A.3 vemos que Nuevo Belén de Bajirá sí tiene IDF, pero su valor agregado es 0. Por eso su ponderador es 0 y no influye en el IDF del Chocó. La razón más probable es que el municipio se creó en noviembre de 2023 y el DANE todavía no le reporta un valor agregado propio.
 
 ### 1.A.2 Proyección del valor agregado 2023 a 2024
 
-El VA municipal del DANE (anexo `anex-PIBDep-ValorAgreMuni-2011-2024p`, Cuadro 1) está a **precios corrientes**, base 2015, en miles de millones de pesos. Se proyectó con el crecimiento del PIB nominal de Colombia en 2024, calculado con la fila COLOMBIA del anexo "PIB total por departamentos" del DANE:
+El VA municipal del DANE (anexo `anex-PIBDep-ValorAgreMuni-2011-2024p`, Cuadro 1) está a **precios corrientes** (cuentas nacionales base 2015), en miles de millones de pesos. Se proyectó con el crecimiento del PIB nominal de Colombia en 2024, calculado con la fila COLOMBIA del anexo "PIB total por departamentos" del DANE (serie 2005-2025pr, publicada el 3 de julio de 2026; fila 11, columnas U = 2023 y V = 2024p). El anexo se descarga de la página de [Cuentas nacionales departamentales del DANE](https://www.dane.gov.co/index.php/estadisticas-por-tema-2/cuentas-nacionales/cuentas-nacionales-departamentales):
 
 ```{r p1_a_tasa}
 round((1713316 - 1587200) / 1587200 * 100, 2)   # tasa redondeada a dos decimales
@@ -274,8 +282,11 @@ kable(t(registro_ibr),
 La serie tiene `r nrow(ibr_on)` días hábiles con dato entre el `r format(min(ibr_on$fecha), "%d/%m/%Y")` y el `r format(max(ibr_on$fecha), "%d/%m/%Y")`.
 
 ```{r tabla_2_a_contraste, echo=FALSE}
-kable(ibr_on %>% filter(fecha %in% fechas_contraste),
-      col.names = c("Fecha", "IBR ON extraída (%)"),
+kable(ibr_on %>%
+        filter(fecha %in% fechas_contraste) %>%
+        left_join(contraste_fuente %>% select(fecha, ibr_fuente), by = "fecha") %>%
+        mutate(coincide = ifelse(abs(ibr_pct - ibr_fuente) < 1e-6, "Sí", "No")),
+      col.names = c("Fecha", "IBR ON extraída (%)", "IBR ON en la página de SUAMECA (%)", "¿Coincide?"),
       caption = "Tabla 2.A.2. Observaciones contrastadas con la página de SUAMECA",
       format.args = list(decimal.mark = ","))
 ```
@@ -286,7 +297,7 @@ include_graphics(file.path(ruta_resultados, "2_A_ibr_on_diaria.png"), rel_path =
 
 **Comentarios del grupo (serie, unidad, convención, contraste y correcciones):**
 
-> *[COMENTARIO: lo escribe el grupo]*
+> *La Tabla 2.A.1 confirma que la serie extraída es la IBR overnight. Es la serie 241 de SUAMECA del Banco de la República, que corresponde al plazo de un día y no a los de uno, tres o seis meses. La unidad es porcentaje nominal anual. La convención es base 360, es decir, días calendario sobre 360 días anuales. El BanRep publica además la tasa efectiva, pero usamos la nominal porque es la que se compara directamente con la SOFR. Extrajimos la serie con web scraping dinámico usando chromote. La página carga los datos con JavaScript, así que tuvimos que abrirla en un navegador sin interfaz y activar el botón “Vista tabla” antes de leer la tabla. La consulta se hizo el 15/11/2026 a las 10:43 y devolvió 1.426 días hábiles con dato entre el 02/01/2020 y el 31/10/2025. La serie empieza el 2 de enero porque el 1 de enero es festivo y no hay dato.Para controlar la extracción, contrastamos tres fechas con la página oficial de SUAMECA: el primer dato (02/01/2020), uno intermedio (30/06/2023) y el último (31/10/2025). La Tabla 2.A.2 muestra que los valores extraídos (4,114 %, 12,270 % y 8,730 %) coinciden con los publicados, así que no tuvimos que corregir ningún valor. Los ajustes que hicimos fueron de limpieza. La tabla de “Vista tabla” trae cinco series de la IBR nominal (overnight y a 1, 3, 6 y 12 meses), así que buscamos la columna por su nombre (“overnight”) y no por su posición, para no tomar otro plazo si el BanRep cambia el orden. Las tasas vienen como texto con punto decimal. Igual dejamos en el código el cambio de coma por punto, por si la página cambia de formato, y después las convertimos a número. Las fechas vienen como “AAAA/MM/DD”, aunque el encabezado dice “MMM DD, AAAA”, y las pasamos a formato Date. Después revisamos que ninguna fecha ni valor quedara en NA. Como la tabla trae toda la serie desde 2008, nos quedamos solo con el periodo pedido y revisamos que no hubiera fechas repetidas. Por último, guardamos el HTML de la tabla en 2_A_ibr_tabla_html.txt para poder revisarlo si algo fallaba.*
 
 ## 2.B SOFR overnight (API, Fed de Nueva York)
 
@@ -307,8 +318,11 @@ kable(t(registro_sofr),
 La serie tiene `r nrow(sofr_on)` días hábiles con dato entre el `r format(min(sofr_on$fecha), "%d/%m/%Y")` y el `r format(max(sofr_on$fecha), "%d/%m/%Y")`.
 
 ```{r tabla_2_b_contraste, echo=FALSE}
-kable(sofr_on %>% filter(fecha %in% fechas_contraste),
-      col.names = c("Fecha", "SOFR ON extraída (%)"),
+kable(sofr_on %>%
+        filter(fecha %in% fechas_contraste) %>%
+        left_join(contraste_fuente %>% select(fecha, sofr_fuente), by = "fecha") %>%
+        mutate(coincide = ifelse(abs(sofr_pct - sofr_fuente) < 1e-6, "Sí", "No")),
+      col.names = c("Fecha", "SOFR ON extraída (%)", "SOFR ON en la página de la Fed (%)", "¿Coincide?"),
       caption = "Tabla 2.B.2. Observaciones contrastadas con la página de la Fed de Nueva York",
       format.args = list(decimal.mark = ","))
 ```
@@ -319,7 +333,7 @@ include_graphics(file.path(ruta_resultados, "2_B_sofr_on_diaria.png"), rel_path 
 
 **Comentarios del grupo (serie, unidad, convención, contraste y correcciones):**
 
-> *[COMENTARIO: lo escribe el grupo]*
+> *La SOFR overnight se descargó de la API de Markets Data de la Fed de Nueva York con una solicitud GET que devuelve un JSON. La URL de la Tabla 2.B.1 ya trae el periodo, del 01/01/2020 al 31/10/2025. La consulta se hizo el 15/11/2026 a las 10:43 y devolvió 1.458 días hábiles. Cada observación trae su fecha (effectiveDate), que es el día en que se hicieron las operaciones y no el día de publicación. La Fed publica la tasa a la mañana siguiente, así que usamos la fecha de la observación para que la SOFR quede alineada con la IBR del mismo día. La unidad es porcentaje anual y la convención es Actual/360, es decir, días calendario reales sobre un año de 360 días. La tasa es la mediana, ponderada por volumen, de las operaciones repo overnight respaldadas con bonos del Tesoro de EE. UU., y se redondea al punto básico. Por eso solo tiene dos decimales, mientras que la IBR tiene tres. Para controlar la extracción contrastamos las mismas tres fechas de la IBR con la página de la Fed. La Tabla 2.B.2 muestra que los valores (1,54 %, 5,09 % y 4,22 %) coinciden. Como la API entrega datos estructurados, no hubo que limpiar formatos. Solo convertimos la fecha a Date y nos quedamos con la fecha y la tasa.*
 
 ## 2.C Gráfico de doble eje
 
@@ -368,7 +382,7 @@ include_graphics(file.path(ruta_resultados, "2_C_doble_eje_mensual.png"), rel_pa
 
 **Frecuencia elegida y tratamiento de las fechas sin observación:**
 
-> *[COMENTARIO: lo escribe el grupo]*
+> *Las dos tasas solo se publican en días hábiles, y cada país tiene su propio calendario de festivos. Para ver cuántos días faltan armamos un calendario con los 2.131 días del periodo y le unimos las dos series. La Tabla 2.C.1 muestra que solo 1.384 días tienen las dos tasas. En 42 días hay IBR pero no SOFR, que son festivos de EE. UU. hábiles en Colombia. En 74 días hay SOFR pero no IBR, que son festivos colombianos hábiles en EE. UU. Los otros 631 días son fines de semana o festivos comunes. No imputamos ningún dato. Tampoco repetimos el último valor disponible ni interpolamos, porque eso inventaría tasas para días en que no hubo mercado. En las gráficas diarias cada serie usa solo sus días hábiles, y la línea une un día hábil con el siguiente. Para la gráfica de doble eje elegimos frecuencia mensual. Cada tasa se promedia sobre sus propios días hábiles del mes, que son entre 18 y 23 para la IBR y entre 19 y 23 para la SOFR. Así los festivos de un país no obligan a botar datos del otro, y las dos series quedan en las mismas 70 fechas. El promedio mensual también suaviza los saltos de un día de la SOFR, como los de fin de mes, que en la serie diaria no dejan ver bien la tendencia. Los días en que falta una de las dos tasas siguen como NA en la base diaria, y la app del punto 3.B los avisa.*
 
 ### Insumos para comparar las tendencias
 
@@ -410,11 +424,11 @@ kable(extremos,
 
 ### Análisis 2.C: comparación de tendencias
 
-> *[INTERPRETACIÓN: la escribe el grupo]*
+> *Las dos tasas siguen el mismo ciclo, pero con diferencias de momento y de nivel. En 2020 ambas caen por la respuesta de los bancos centrales a la pandemia. La SOFR baja casi de inmediato, de 1,54 % a 0,01 % el 24 de marzo de 2020, y la IBR baja de forma más gradual, de 4,11 % hasta su mínimo de 1,61 % en marzo de 2021. Las dos se quedan en ese piso durante 2021. La IBR empieza a subir en octubre de 2021, unos cinco meses antes que la SOFR, que sube desde marzo de 2022. La subida de la IBR también es mucho más grande: llega a 12,35 % en mayo de 2023, mientras que la SOFR llega a 5,40 % a finales de 2023. Las dos se quedan en el máximo durante buena parte de 2023, y la IBR vuelve a moverse primero. Baja desde finales de 2023 hasta 8,73 % a mediados de 2025, mientras que la SOFR empieza a bajar en septiembre de 2024 y termina en 4,22 %. La Tabla 2.C.2 muestra que la diferencia entre las dos tasas cambia mucho en el periodo. Pasa de 1,83 p. p. en 2021 a 7,07 p. p. en 2023 y baja a 4,51 p. p. en 2025. Es decir, se abrió cuando el BanRep subió más fuerte que la Fed y se cerró cuando empezó a recortar antes. Hay que tener en cuenta que las dos tasas no se miden igual: la IBR se calcula con base 360 y la SOFR con Actual/360, y la gráfica de doble eje usa escalas distintas para cada una. Por eso la gráfica sirve para comparar tendencias y no niveles; para los niveles está la Tabla 2.C.2. En la serie diaria también se ve que la IBR se mueve en escalones, porque sigue de cerca la tasa de política del BanRep, mientras que la SOFR tiene más ruido de un día a otro.*
 
 # Punto 3. Aplicativo Shiny
 
-El aplicativo está en `Taller_3.R` (sección del Punto 3) y lee los datos de `app_shiny/datos/`.
+El aplicativo está en `app_shiny/app.R` y lee los datos de `app_shiny/datos/`. Se abre con el botón *Run App* de RStudio (con `app.R` abierto) o con la línea de `runApp()` al final de `Taller3.R`.
 
 ## 3.A Mapa interactivo del IDF departamental
 
@@ -478,3 +492,11 @@ kable(ejemplos_dev,
 >
 > El objetivo analítico de esta gráfica es evaluar si el tamaño poblacional o económico de un municipio explica por sí solo su desempeño fiscal, así como ilustrar una precaución metodológica clave del Punto 1.A: dado que el IDF departamental se pondera por población y valor agregado, su valor tiende a reflejar principalmente el comportamiento de los municipios más grandes y con mayor actividad económica dentro de cada departamento, aun cuando la correlación lineal entre tamaño y desempeño fiscal municipal sea moderada o requiera variables institucionales adicionales para explicarse por completo.
 
+
+# Anexo. Paquetes y funciones no vistos en clase
+
+En `Taller3.R` y en `app_shiny/app.R` lo no visto en clase se marca así:
+
+- **Paquete no visto:** se nombra en la configuración inicial del script y cada línea que lo usa termina en `# [NO VISTO EN CLASE]`. El único es `readxl` (`readxl::read_excel()`), que lee el Excel del IDF del DNP porque `openxlsx` no lo puede abrir.
+- **Función no vista de un paquete que sí se vio:** la línea lleva el comentario `# Función no vista: ...`, con para qué sirve.
+- **`formatC()` y `sprintf()`** (base R, formato de números y de texto): llevan el comentario `formatC: ...` o `sprintf: ...` en la línea donde se usan.
