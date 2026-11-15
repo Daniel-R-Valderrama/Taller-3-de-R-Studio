@@ -8,19 +8,39 @@ rm(list = ls())
 # Si es la primera vez o tienen errores de versiones, NO instalen desde aquí:
 # corran primero el script 00_reinstalar_paquetes.R en una sesión nueva de R.
 # CUIDADO: instalar un paquete que ya está cargado deja la instalación a medias.
+# CUIDADO: chromote controla Google Chrome, así que Chrome debe estar instalado.
+# CUIDADO: se cargan en el mismo orden de antes. Si dos paquetes tienen una
+# función con el mismo nombre, gana el último cargado (por ejemplo, DT va
+# después de shiny); cambiar el orden puede cambiar qué función se usa.
 
+# ---------- Punto 1: datos geoespaciales ----------
 library(sf)          # datos geoespaciales (shapefiles, proyecciones, geometrías)
 library(dplyr)       # manipulación de datos
 library(ggplot2)     # visualización (geom_sf dibuja mapas)
 library(ggrepel)     # etiquetas que no se solapan
 library(BAMMtools)   # getJenksBreaks(): clasificación por cortes naturales
-
-#otros paquetes para este punto
 library(openxlsx)      # lectura de los Excel de DNP y DANE y exportación de tablas
 library(RColorBrewer)  # paletas de color para el mapa
 library(docstring)     # documentación de la función de verificación de uniones
 
-# Paquetes no vistos en clase:
+# ---------- Punto 2: web scraping y API ----------
+library(robotstxt)  # lee las reglas del archivo robots.txt
+library(httr2)      # petición del robots.txt con user-agent y límite de tiempo
+library(chromote)   # navegador "sin pantalla" para páginas dinámicas
+library(rvest)      # convierte el HTML de la tabla en data frame
+library(stringr)    # manipulación de texto
+library(scales)     # formato de los ejes
+library(plotly)     # gráfica interactiva
+library(htmlwidgets) # guardar la gráfica interactiva en HTML
+library(httr)       # peticiones a APIs (SOFR)
+library(jsonlite)   # lectura del formato JSON (SOFR)
+
+# ---------- Punto 3: aplicativo Shiny ----------
+library(shiny)
+library(shinydashboard)
+library(DT)
+
+# Paquetes no vistos en clase (Punto 1):
 #   readxl: lectura del Excel del IDF (DNP). openxlsx no lo puede abrir porque
 #   el archivo escribe sus etiquetas XML con prefijo "x:" y openxlsx responde
 #   "Workbook has no worksheet". Se llama siempre como readxl::read_excel() y
@@ -35,11 +55,14 @@ username <- Sys.getenv("USERNAME")     # usuario del sistema
 
 # ajustarla a la ubicación de SU carpeta "Taller 3".
 ruta_taller <- paste0("C:/Users/", username,
-                      "/OneDrive/Escritorio/Andes/R/Talleres/Taller 3")
+                      "/OneDrive/Escritorio/2026-2/R/Taller 3")
+
 
 #Configuración MacOs
 #username <- Sys.getenv("USER")
 #ruta_taller <- paste0("/Users/", username, "/Taller 3")
+#Configuración MacOs (David)
+#ruta_taller <- paste0("/Users/", username, "/Documents/Maestría/R/Taller 3/Taller 3")
 
 setwd(ruta_taller)
 
@@ -861,32 +884,17 @@ cat("\014")
 
 # Si es la primera vez o tienen errores de versiones, NO instalen desde aquí:
 # corran primero el script 00_reinstalar_paquetes.R en una sesión nueva de R.
-# CUIDADO: instalar un paquete que ya está cargado deja la instalación a medias.
 # CUIDADO: chromote controla Google Chrome, así que Chrome debe estar instalado.
 
-library(robotstxt)  # lee las reglas del archivo robots.txt
-library(httr2)      # petición del robots.txt con user-agent y límite de tiempo
-library(chromote)   # navegador "sin pantalla" para páginas dinámicas
-library(rvest)      # convierte el HTML de la tabla en data frame
-library(stringr)    # manipulación de texto
-library(dplyr)      # manipulación de datos
-library(openxlsx)   # exportar a Excel
-library(ggplot2)    # gráfica estática
-library(scales)     # formato de los ejes
-library(plotly)     # gráfica interactiva
-library(htmlwidgets) # guardar la gráfica interactiva en HTML
-library(httr)       # peticiones a APIs (SOFR)
-library(jsonlite)   # lectura del formato JSON (SOFR)
-
-#otros paquetes para este punto
+# Los paquetes de este punto se cargan al inicio del script.
 # Paquetes no vistos en clase: ninguno
 
 # ==============================================================================
 # DIRECTORIO DE TRABAJO
 # ==============================================================================
 
-# CUIDADO: esta es la ruta de la carpeta de David (Mac). Cada integrante debe
-# ajustarla a la ubicación de SU carpeta "Taller 3".
+# Las rutas (ruta_taller, ruta_resultados, ruta_app_datos) se definen al
+# inicio del script, en el DIRECTORIO DE TRABAJO del Punto 1.
 
 # Verificación Programática 1: la carpeta de salida existe
 if (!dir.exists(ruta_resultados)) {
@@ -1747,8 +1755,7 @@ if (!all(file.exists(archivos_doble))) {
 }
 
 # ---------- Para el punto 3 ----------
-ruta_app_datos <- file.path(ruta_taller, "app_shiny", "datos")
-dir.create(ruta_app_datos, showWarnings = FALSE, recursive = TRUE)
+# ruta_app_datos se define al inicio del script
 saveRDS(ibr_on,        file.path(ruta_app_datos, "ibr_on.rds"))
 saveRDS(sofr_on,       file.path(ruta_app_datos, "sofr_on.rds"))
 saveRDS(tasas_mensual, file.path(ruta_app_datos, "tasas_mensual.rds"))
@@ -1764,28 +1771,14 @@ rm(ibr_recuperada, filas_antes)
 # Se ejecuta al llegar a shinyApp(ui = ui, server = server).
 
 # Paquetes vistos en clase: shiny, shinydashboard, plotly, DT, dplyr, sf, RColorBrewer
+# (se cargan al inicio del script)
 # Funciones no vistas en clase: add_sf() y event_data() de plotly (mapa con clic)
-library(shiny)
-library(shinydashboard)
-library(plotly)
-library(DT)
-library(sf)
-library(dplyr)
-library(RColorBrewer)
 
 # =============================================================================
 # DATOS (generados por los scripts de los puntos 1 y 2)
 # =============================================================================
-# CUIDADO: cada integrante ajusta esta ruta a SU carpeta "Taller 3".
-#Configuración Windows
-username       <- Sys.getenv("USERNAME")
-ruta_app_datos <- paste0("C:/Users/", username,
-                         "/OneDrive/Escritorio/Andes/R/Talleres/Taller 3/app_shiny/datos")
-
-#Configuración MacOs
-#username       <- Sys.getenv("USER")
-#ruta_app_datos <- paste0("/Users/", username, "/Documents/Maestría/R/Taller 3/Taller 3/app_shiny/datos")
-
+# ruta_app_datos se define al inicio del script (DIRECTORIO DE TRABAJO).
+# Respaldo si la app se corre sola desde la carpeta app_shiny/:
 if (!dir.exists(ruta_app_datos)) {
   ruta_app_datos <- "datos"
 }
