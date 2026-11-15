@@ -1,1 +1,434 @@
+---
+title: "Taller 3: Datos geoespaciales, web scraping y herramientas de visualización"
+subtitle: "Taller de Programación en R · Facultad de Economía, Universidad de los Andes · 2026-2"
+author: "Daniel Eduardo Ramirez Hoyos |
+ Daniel Ricardo Valderrama |
+ David Santiago Morales Camacho"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+# ==============================================================================
+# CONFIGURACIÓN DEL DOCUMENTO
+# ==============================================================================
+# CUIDADO (Clase 9): el documento corre en una sesión NUEVA. Todo lo que
+# necesite (paquetes y datos) se carga aquí. Antes de tejerlo hay que correr
+# Taller_3.R para que existan los archivos de Resultados/ y app_shiny/datos/.
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+
+library(dplyr)       # manipulación de datos
+library(openxlsx)    # lectura de las tablas exportadas en Excel
+library(knitr)       # kable() para tablas
+
+#Configuración Windows
+username    <- Sys.getenv("USERNAME")
+ruta_taller <- paste0("C:/Users/", username, "/OneDrive/Escritorio/2026-2/R/Taller 3")
+
+#Configuración MacOs (David)
+#username    <- Sys.getenv("USER")
+#ruta_taller <- paste0("/Users/", username, "/Documents/Maestría/R/Taller 3/Taller 3")
+
+knitr::opts_knit$set(root.dir = ruta_taller)
+
+ruta_resultados <- file.path(ruta_taller, "Resultados")
+ruta_app_datos  <- file.path(ruta_taller, "app_shiny", "datos")
+
+fecha_inicio <- as.Date("2020-01-01")   # inicio del periodo pedido
+fecha_fin    <- as.Date("2025-10-31")   # fin del periodo pedido
+tasa_pib_2024 <- 7.95                   # crecimiento % del PIB nominal 2024 (BLOQUE 5 del Punto 1)
+fechas_contraste <- as.Date(c("2020-01-02", "2023-06-30", "2025-10-31"))   # fechas revisadas en la fuente
+```
+
+# Punto 1. Datos geoespaciales
+
+## 1.A IDF departamental artificial
+
+```{r p1_a}
+# ==============================================================================
+# 1.A IDF DEPARTAMENTAL ARTIFICIAL
+# ==============================================================================
+idf_dpto          <- readRDS(file.path(ruta_resultados, "1_A_idf_dpto.rds"))
+resumen_faltantes <- readRDS(file.path(ruta_resultados, "1_A_resumen_faltantes.rds"))
+base_mun          <- readRDS(file.path(ruta_app_datos, "base_mun.rds"))   # un municipio por fila
+
+archivo_uniones <- file.path(ruta_resultados, "1_A_verificacion_uniones.xlsx")
+pob_sin_idf     <- read.xlsx(archivo_uniones, sheet = "Poblacion_sin_IDF")
+rango_dpto      <- read.xlsx(file.path(ruta_resultados, "1_A_idf_dpto.xlsx"), sheet = "Rango_municipal")
+rango_dpto$cod_dpto <- formatC(as.integer(rango_dpto$cod_dpto), width = 2, flag = "0")   # formatC: código departamental a 2 dígitos
+```
+
+### 1.A.1 Revisión de las llaves y uniones
+
+```{r tabla_1_a_uniones, echo=FALSE}
+kable(resumen_faltantes,
+      col.names = c("Concepto", "Municipios"),
+      caption = "Tabla 1.A.1. Resultado de las uniones entre IDF (DNP), población y VA (DANE)",
+      format.args = list(big.mark = ".", decimal.mark = ","))
+```
+
+Municipios que están en población y VA, pero no en la base del IDF del DNP (no entran al cálculo):
+
+```{r tabla_1_a_sin_idf, echo=FALSE}
+kable(pob_sin_idf,
+      caption = paste0("Tabla 1.A.2. Municipios sin IDF municipal (", nrow(pob_sin_idf), ")"),
+      format.args = list(big.mark = ".", decimal.mark = ","))
+```
+
+Municipios con VA 2023 igual a cero (su ponderador queda en cero):
+
+```{r tabla_1_a_va_cero, echo=FALSE}
+kable(base_mun %>%
+        filter(va_2024 == 0) %>%
+        select(cod_mpio, nombre_mpio, nombre_dpto, idf, poblacion, va_2024),
+      col.names = c("Código", "Municipio", "Departamento", "IDF", "Población 2024", "VA 2024"),
+      caption = "Tabla 1.A.3. Municipios con IDF y VA igual a cero",
+      format.args = list(big.mark = ".", decimal.mark = ","))
+```
+
+**Comentarios del grupo (llaves y municipios que no entran):**
+
+> *[COMENTARIO: lo escribe el grupo]*
+
+### 1.A.2 Proyección del valor agregado 2023 a 2024
+
+El VA municipal del DANE (anexo `anex-PIBDep-ValorAgreMuni-2011-2024p`, Cuadro 1) está a **precios corrientes**, base 2015, en miles de millones de pesos. Se proyectó con el crecimiento del PIB nominal de Colombia en 2024, calculado con la fila COLOMBIA del anexo "PIB total por departamentos" del DANE:
+
+```{r p1_a_tasa}
+round((1713316 - 1587200) / 1587200 * 100, 2)   # tasa redondeada a dos decimales
+round((1713316 - 1587200) / 1587200 * 100, 2) == tasa_pib_2024   # debe salir TRUE
+```
+
+VA 2024 = VA 2023 × (1 + `r format(tasa_pib_2024, decimal.mark = ",")` / 100).
+
+**Justificación de la tasa elegida:**
+
+> *[INTERPRETACIÓN: la escribe el grupo]*
+
+### 1.A.3 Ponderadores y comprobación del cálculo
+
+Se recalcula aquí el IDF departamental desde la base municipal, por dos procedimientos, para comprobar el resultado del script.
+
+```{r p1_a_comprobacion}
+# Solo entran los municipios con IDF, población y VA
+base_w <- base_mun %>%
+  filter(!is.na(idf), !is.na(poblacion), !is.na(va_2024)) %>%
+  group_by(cod_dpto) %>%
+  mutate(w = (poblacion * va_2024) / sum(poblacion * va_2024)) %>%
+  ungroup()
+
+comprobacion <- base_w %>%
+  group_by(cod_dpto, nombre_dpto) %>%
+  summarise(suma_w        = sum(w),                                   # debe ser 1
+            idf_suma_w    = sum(idf * w),                             # procedimiento 1: fórmula (1)
+            idf_weighted  = weighted.mean(idf, poblacion * va_2024),  # procedimiento 2: weighted.mean
+            .groups = "drop") %>%
+  left_join(idf_dpto %>% select(cod_dpto, idf_dpto), by = "cod_dpto")
+
+# Verificación: ponderadores suman 1 y los tres cálculos coinciden
+all(abs(comprobacion$suma_w - 1) < 1e-6)
+all(abs(comprobacion$idf_suma_w - comprobacion$idf_weighted) < 1e-6)
+all(abs(round(comprobacion$idf_suma_w, 2) - comprobacion$idf_dpto) < 1e-6)
+```
+
+```{r tabla_1_a_comprobacion, echo=FALSE}
+kable(comprobacion %>%
+        left_join(rango_dpto %>% select(cod_dpto, idf_min, idf_max), by = "cod_dpto") %>%
+        select(cod_dpto, nombre_dpto, suma_w, idf_suma_w, idf_weighted, idf_min, idf_max),
+      col.names = c("Código", "Departamento", "Suma de w", "IDF: Σ IDF·w",
+                    "IDF: weighted.mean()", "IDF municipal mínimo", "IDF municipal máximo"),
+      caption = "Tabla 1.A.4. Ponderadores y cálculo comprobado por otro procedimiento",
+      digits = 4,
+      format.args = list(decimal.mark = ","))
+```
+
+**Comentarios del grupo (verificaciones):**
+
+> *[COMENTARIO: lo escribe el grupo]*
+
+### 1.A.4 IDF departamental
+
+```{r tabla_1_a, echo=FALSE}
+kable(idf_dpto,
+      col.names = c("Código", "Departamento", "IDF departamental", "IDF promedio simple",
+                    "Municipios", "Población 2024", "VA 2024 (miles de millones)"),
+      caption = "Tabla 1.A.5. IDF departamental artificial, 2024 (de mayor a menor)",
+      digits = 2,
+      format.args = list(big.mark = ".", decimal.mark = ","))
+```
+
+El IDF se calculó para `r nrow(idf_dpto)` departamentos. El más alto es `r idf_dpto$nombre_dpto[1]` (`r format(idf_dpto$idf_dpto[1], decimal.mark = ",")`) y el más bajo es `r idf_dpto$nombre_dpto[nrow(idf_dpto)]` (`r format(idf_dpto$idf_dpto[nrow(idf_dpto)], decimal.mark = ",")`).
+
+```{r fig_1_a, echo=FALSE, out.width="100%"}
+include_graphics(file.path(ruta_resultados, "1_A_mapa_idf_dpto.png"))
+```
+
+### Análisis 1.A
+
+> *[INTERPRETACIÓN: la escribe el grupo]*
+
+## 1.B Mapa del IDF municipal
+
+```{r p1_b}
+# ==============================================================================
+# 1.B MAPA MUNICIPAL: DIAGNÓSTICO
+# ==============================================================================
+diagnostico_1b <- readRDS(file.path(ruta_resultados, "1_B_diagnostico.rds"))
+```
+
+```{r tabla_1_b, echo=FALSE}
+kable(diagnostico_1b,
+      col.names = c("Medida", "Original", "Simplificado"),
+      caption = "Tabla 1.B. Shapefile municipal antes y después de simplificar",
+      format.args = list(big.mark = ".", decimal.mark = ","))
+```
+
+```{r fig_1_b, echo=FALSE, out.width="100%"}
+include_graphics(file.path(ruta_resultados, "1_B_mapa_idf_mpio.png"))
+```
+
+### Análisis 1.B: problemas computacionales encontrados
+
+> *[INTERPRETACIÓN: la escribe el grupo]*
+
+# Punto 2. Web scraping y API
+
+## 2.A IBR overnight (web scraping, Banco de la República)
+
+```{r p2_a}
+# ==============================================================================
+# 2.A IBR OVERNIGHT DIARIA
+# ==============================================================================
+ibr_on       <- readRDS(file.path(ruta_app_datos, "ibr_on.rds"))
+registro_ibr <- read.xlsx(file.path(ruta_resultados, "2_A_ibr_on.xlsx"), sheet = "Registro")
+```
+
+```{r tabla_2_a, echo=FALSE}
+kable(t(registro_ibr),
+      col.names = "IBR overnight",
+      caption = "Tabla 2.A.1. Registro de la extracción: fuente, serie, método, fecha de consulta, unidad y convención")
+```
+
+La serie tiene `r nrow(ibr_on)` días hábiles con dato entre el `r format(min(ibr_on$fecha), "%d/%m/%Y")` y el `r format(max(ibr_on$fecha), "%d/%m/%Y")`.
+
+```{r tabla_2_a_contraste, echo=FALSE}
+kable(ibr_on %>% filter(fecha %in% fechas_contraste),
+      col.names = c("Fecha", "IBR ON extraída (%)"),
+      caption = "Tabla 2.A.2. Observaciones contrastadas con la página de SUAMECA",
+      format.args = list(decimal.mark = ","))
+```
+
+```{r fig_2_a, echo=FALSE, out.width="100%"}
+include_graphics(file.path(ruta_resultados, "2_A_ibr_on_diaria.png"))
+```
+
+**Comentarios del grupo (serie, unidad, convención, contraste y correcciones):**
+
+> *[COMENTARIO: lo escribe el grupo]*
+
+## 2.B SOFR overnight (API, Fed de Nueva York)
+
+```{r p2_b}
+# ==============================================================================
+# 2.B SOFR OVERNIGHT DIARIA
+# ==============================================================================
+sofr_on       <- readRDS(file.path(ruta_app_datos, "sofr_on.rds"))
+registro_sofr <- read.xlsx(file.path(ruta_resultados, "2_B_sofr_on.xlsx"), sheet = "Registro")
+```
+
+```{r tabla_2_b, echo=FALSE}
+kable(t(registro_sofr),
+      col.names = "SOFR overnight",
+      caption = "Tabla 2.B.1. Registro de la extracción: fuente, serie, método, fecha de consulta, unidad y convención")
+```
+
+La serie tiene `r nrow(sofr_on)` días hábiles con dato entre el `r format(min(sofr_on$fecha), "%d/%m/%Y")` y el `r format(max(sofr_on$fecha), "%d/%m/%Y")`.
+
+```{r tabla_2_b_contraste, echo=FALSE}
+kable(sofr_on %>% filter(fecha %in% fechas_contraste),
+      col.names = c("Fecha", "SOFR ON extraída (%)"),
+      caption = "Tabla 2.B.2. Observaciones contrastadas con la página de la Fed de Nueva York",
+      format.args = list(decimal.mark = ","))
+```
+
+```{r fig_2_b, echo=FALSE, out.width="100%"}
+include_graphics(file.path(ruta_resultados, "2_B_sofr_on_diaria.png"))
+```
+
+**Comentarios del grupo (serie, unidad, convención, contraste y correcciones):**
+
+> *[COMENTARIO: lo escribe el grupo]*
+
+## 2.C Gráfico de doble eje
+
+```{r p2_c}
+# ==============================================================================
+# 2.C FECHAS SIN OBSERVACIÓN, PROMEDIOS MENSUALES Y DOBLE EJE
+# ==============================================================================
+tasas_mensual <- readRDS(file.path(ruta_app_datos, "tasas_mensual.rds"))
+
+# Calendario con todos los días del periodo (Clase 8) y las dos tasas
+calendario <- data.frame(fecha = seq(fecha_inicio, fecha_fin, by = "day")) %>%
+  left_join(ibr_on,  by = "fecha") %>%
+  left_join(sofr_on, by = "fecha")
+
+nrow(calendario)   # días del periodo
+```
+
+### Fechas sin observación
+
+```{r tabla_2_c_na, echo=FALSE}
+dias_sin_dato <- data.frame(
+  situacion = c("Días del periodo",
+                "Con IBR y con SOFR",
+                "Con IBR, sin SOFR (festivos de EE. UU. hábiles en Colombia)",
+                "Con SOFR, sin IBR (festivos de Colombia hábiles en EE. UU.)",
+                "Sin ninguna tasa (fines de semana y festivos comunes)"),
+  dias = c(nrow(calendario),
+           sum(!is.na(calendario$ibr_pct) & !is.na(calendario$sofr_pct)),
+           sum(!is.na(calendario$ibr_pct) &  is.na(calendario$sofr_pct)),
+           sum( is.na(calendario$ibr_pct) & !is.na(calendario$sofr_pct)),
+           sum( is.na(calendario$ibr_pct) &  is.na(calendario$sofr_pct)))
+)
+kable(dias_sin_dato,
+      col.names = c("Situación", "Días"),
+      caption = "Tabla 2.C.1. Días con y sin observación de cada tasa, 01/01/2020 a 31/10/2025",
+      format.args = list(big.mark = ".", decimal.mark = ","))
+```
+
+### Agregación mensual
+
+Cada tasa se promedió por mes sobre sus propios días hábiles: `r nrow(tasas_mensual)` meses, entre `r min(tasas_mensual$dias_ibr)` y `r max(tasas_mensual$dias_ibr)` días por mes para la IBR y entre `r min(tasas_mensual$dias_sofr)` y `r max(tasas_mensual$dias_sofr)` para la SOFR.
+
+```{r fig_2_c, echo=FALSE, out.width="100%"}
+include_graphics(file.path(ruta_resultados, "2_C_doble_eje_mensual.png"))
+```
+
+**Frecuencia elegida y tratamiento de las fechas sin observación:**
+
+> *[COMENTARIO: lo escribe el grupo]*
+
+### Insumos para comparar las tendencias
+
+```{r tabla_2_c_anual, echo=FALSE}
+promedio_anual <- calendario %>%
+  mutate(anio = as.integer(format(fecha, "%Y"))) %>%
+  group_by(anio) %>%
+  summarise(ibr_pct  = mean(ibr_pct,  na.rm = TRUE),
+            sofr_pct = mean(sofr_pct, na.rm = TRUE),
+            .groups  = "drop") %>%
+  mutate(diferencia = ibr_pct - sofr_pct)
+
+kable(promedio_anual,
+      col.names = c("Año", "IBR ON promedio (%)", "SOFR ON promedio (%)", "IBR − SOFR (p. p.)"),
+      caption = "Tabla 2.C.2. Promedio anual de los días hábiles de cada tasa (2025: enero a octubre)",
+      digits = 2,
+      format.args = list(decimal.mark = ","))
+```
+
+```{r tabla_2_c_extremos, echo=FALSE}
+extremos <- data.frame(
+  tasa       = c("IBR ON", "SOFR ON"),
+  inicio     = c(ibr_on$ibr_pct[1], sofr_on$sofr_pct[1]),
+  minimo     = c(min(ibr_on$ibr_pct), min(sofr_on$sofr_pct)),
+  fecha_min  = format(c(ibr_on$fecha[which.min(ibr_on$ibr_pct)],
+                        sofr_on$fecha[which.min(sofr_on$sofr_pct)]), "%d/%m/%Y"),
+  maximo     = c(max(ibr_on$ibr_pct), max(sofr_on$sofr_pct)),
+  fecha_max  = format(c(ibr_on$fecha[which.max(ibr_on$ibr_pct)],
+                        sofr_on$fecha[which.max(sofr_on$sofr_pct)]), "%d/%m/%Y"),
+  final      = c(ibr_on$ibr_pct[nrow(ibr_on)], sofr_on$sofr_pct[nrow(sofr_on)])
+)
+kable(extremos,
+      col.names = c("Tasa", "Primer dato (%)", "Mínimo (%)", "Fecha del mínimo (primera vez)",
+                    "Máximo (%)", "Fecha del máximo", "Último dato (%)"),
+      caption = "Tabla 2.C.3. Inicio, extremos y final de cada serie diaria",
+      digits = 3,
+      format.args = list(decimal.mark = ","))
+```
+
+### Análisis 2.C: comparación de tendencias
+
+> *[INTERPRETACIÓN: la escribe el grupo]*
+
+# Punto 3. Aplicativo Shiny
+
+El aplicativo está en `Taller_3.R` (sección del Punto 3) y lee los datos de `app_shiny/datos/`.
+
+## 3.A Mapa interactivo del IDF departamental
+
+En la app se distingue el **IDF departamental** (índice ponderado del mapa) del **IDF municipal** (el de cada municipio del top 3). Esta es la tabla que la app muestra al elegir cada departamento:
+
+```{r tabla_3_a, echo=FALSE}
+top3 <- base_mun %>%
+  filter(!is.na(idf)) %>%
+  group_by(nombre_dpto) %>%
+  arrange(desc(idf)) %>%
+  mutate(puesto = row_number()) %>%
+  filter(puesto <= 3) %>%
+  ungroup() %>%
+  left_join(idf_dpto %>% select(nombre_dpto, idf_dpto), by = "nombre_dpto") %>%
+  arrange(desc(idf_dpto), puesto) %>%
+  select(nombre_dpto, idf_dpto, puesto, nombre_mpio, idf)
+
+kable(top3,
+      col.names = c("Departamento", "IDF departamental", "Puesto", "Municipio", "IDF municipal"),
+      caption = "Tabla 3.A. Top 3 de municipios por IDF municipal en cada departamento",
+      digits = 2,
+      format.args = list(decimal.mark = ","))
+```
+
+**Comentarios del grupo:**
+
+> *[COMENTARIO: lo escribe el grupo]*
+
+## 3.B Doble eje interactivo y devaluación implícita
+
+La app calcula π = (1 + i~d~) / (1 + i~e~) − 1, con i~d~ = IBR ON e i~e~ = SOFR ON en decimales. Ejemplos con las fechas contrastadas y con días en que falta una de las tasas:
+
+```{r tabla_3_b, echo=FALSE}
+# Primer día con IBR y sin SOFR, y primer día con SOFR y sin IBR
+dia_sin_sofr <- calendario$fecha[!is.na(calendario$ibr_pct) & is.na(calendario$sofr_pct)][1]
+dia_sin_ibr  <- calendario$fecha[is.na(calendario$ibr_pct) & !is.na(calendario$sofr_pct)][1]
+
+ejemplos_dev <- calendario %>%
+  filter(fecha %in% c(fechas_contraste, dia_sin_sofr, dia_sin_ibr)) %>%
+  mutate(ibr_dec  = ibr_pct / 100,
+         sofr_dec = sofr_pct / 100,
+         pi_pct   = ((1 + ibr_dec) / (1 + sofr_dec) - 1) * 100) %>%
+  select(fecha, ibr_dec, sofr_dec, pi_pct)
+
+kable(ejemplos_dev,
+      col.names = c("Fecha", "IBR ON (decimal)", "SOFR ON (decimal)", "Devaluación implícita (% anual)"),
+      caption = "Tabla 3.B. Devaluación implícita en fechas de ejemplo (NA: falta una tasa; la app lo avisa)",
+      digits = 5,
+      format.args = list(decimal.mark = ","))
+```
+
+**Comentarios del grupo (instrucciones de uso, unidad del resultado, fechas sin tasa):**
+
+> *[COMENTARIO: lo escribe el grupo]*
+
+## 3.C Gráfica libre
+
+**Datos usados y qué se busca mostrar:**
+
+> *[INTERPRETACIÓN: la escribe el grupo]*
+
+# Notas de entrega
+
+## Paquetes no vistos en clase
+
+**Paquetes usados y cómo se marcaron en el código:**
+
+> *[COMENTARIO: lo escribe el grupo]*
+
+## Uso de inteligencia artificial
+
+**Enlace o anexo de la conversación:**
+
+> *[COMENTARIO: lo escribe el grupo]*
 
