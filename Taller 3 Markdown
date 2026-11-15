@@ -383,7 +383,7 @@ kable(top3,
 
 **Comentarios del grupo:**
 
-> *[COMENTARIO: lo escribe el grupo]*
+> En esta pestaña se presenta un mapa coroplético interactivo construido con `leaflet` que representa el **IDF departamental ponderado** calculado en el Punto 1.A. Al hacer clic sobre cualquier polígono departamental (o seleccionarlo en el menú desplegable), la aplicación captura el código DANE del departamento y actualiza dinámicamente una tabla lateral con el **top 3 de municipios según su IDF municipal individual** (sin ponderar). Se incluyó además la opción de visualizar la distribución departamental en escala continua o discreta por cuartiles para facilitar la comparación territorial.
 
 ## 3.B Doble eje interactivo y devaluación implícita
 
