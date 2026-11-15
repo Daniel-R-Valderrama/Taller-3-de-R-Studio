@@ -441,7 +441,7 @@ kable(top3,
 
 **Comentarios del grupo:**
 
-> *[COMENTARIO: lo escribe el grupo]*
+> En esta pestaña se presenta un mapa interactivo construido directamente en `plotly` (`plot_ly()` con `add_sf()`) que representa el **IDF departamental ponderado** de 2024, clasificado mediante los mismos **cortes naturales de Jenks** y paleta `YlGnBu` del Punto 1.A. Al hacer clic sobre cualquier polígono departamental (capturando el evento con `event_data("plotly_click")` y el atributo `meta`) o seleccionarlo en la lista desplegable (necesario para consultar el Archipiélago de San Andrés, Providencia y Santa Catalina), la aplicación resalta el contorno del departamento seleccionado, actualiza el indicador superior con su índice departamental ponderado y filtra la tabla lateral (`DT`) con el **top 3 de municipios según su IDF municipal individual** oficial del DNP (sin ponderar).
 
 ## 3.B Doble eje interactivo y devaluación implícita
 
@@ -468,24 +468,13 @@ kable(ejemplos_dev,
 
 **Comentarios del grupo (instrucciones de uso, unidad del resultado, fechas sin tasa):**
 
-> *[COMENTARIO: lo escribe el grupo]*
+> La segunda pestaña integra un gráfico interactivo de doble eje en `plotly` (SOFR ON en el eje izquierdo e IBR ON en el eje derecho) que permite alternar entre el **promedio mensual** y la **serie diaria de días hábiles**, junto con una línea vertical punteada que marca la fecha consultada. Para calcular la **devaluación implícita** ($\pi$), el usuario ingresa o selecciona una fecha entre `2020-01-01` y `2025-10-31`; la aplicación consulta las tasas diarias correspondientes, las convierte a formato decimal ($\text{porcentaje} \div 100$) y aplica $\pi = \frac{1 + i_d}{1 + i_e} - 1$. Dado que la IBR overnight (serie 241, nominal base 360) y la SOFR overnight (Actual/360) se expresan como **tasas anuales**, el resultado corresponde a una **tasa de devaluación implícita anual expresada en porcentaje (%)**. En fines de semana y días hábiles asimétricos (festivos en Colombia o en Estados Unidos donde falta alguna de las dos series), las tarjetas superiores indican `"Sin dato"` y `"No calculable"`, y se despliega un recuadro de advertencia especificando exactamente qué tasa no cotizó en esa fecha en lugar de arrojar un error de ejecución.
 
 ## 3.C Gráfica libre
 
 **Datos usados y qué se busca mostrar:**
 
-> *[INTERPRETACIÓN: la escribe el grupo]*
+> Para la visualización libre se integraron las bases municipales consolidadas en el Punto 1: el **Índice de Desempeño Fiscal (IDF)** municipal 2024 publicado por el DNP (puntaje de 0 a 100), las **proyecciones de población** municipal para 2024 del DANE (en personas) y el **Valor Agregado (VA)** municipal del DANE de 2023 proyectado a 2024 con el crecimiento nominal del PIB nacional (en miles de millones de pesos corrientes). El diagrama de dispersión interactivo relaciona en el eje vertical el IDF municipal frente al tamaño poblacional o económico del municipio en el eje horizontal (intercambiable mediante selector), permitiendo filtrar por uno o varios departamentos, activar escala logarítmica ($\log_{10}$) en el eje horizontal para distinguir municipios de distinta magnitud frente a la asimetría de las grandes capitales y superponer una recta de tendencia lineal junto con el coeficiente de correlación de Pearson dinámico.
+>
+> El objetivo analítico de esta gráfica es evaluar si el tamaño poblacional o económico de un municipio explica por sí solo su desempeño fiscal, así como ilustrar una precaución metodológica clave del Punto 1.A: dado que el IDF departamental se pondera por población y valor agregado, su valor tiende a reflejar principalmente el comportamiento de los municipios más grandes y con mayor actividad económica dentro de cada departamento, aun cuando la correlación lineal entre tamaño y desempeño fiscal municipal sea moderada o requiera variables institucionales adicionales para explicarse por completo.
 
-# Notas de entrega
-
-## Paquetes no vistos en clase
-
-**Paquetes usados y cómo se marcaron en el código:**
-
-> *[COMENTARIO: lo escribe el grupo]*
-
-## Uso de inteligencia artificial
-
-**Enlace o anexo de la conversación:**
-
-> *[COMENTARIO: lo escribe el grupo]*
