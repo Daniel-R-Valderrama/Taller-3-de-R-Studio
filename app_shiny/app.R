@@ -69,11 +69,6 @@ color_ibr  <- "#1F5F99"
 fuente_tasas <- paste0("Fuente: Banco de la República, SUAMECA (serie 241, web scraping); ",
                        "Federal Reserve Bank of New York, Markets Data API. Cálculos propios.")
 
-# TEXTO DE LA PESTAÑA C
-# ¿qué representa cada punto? ¿de qué fuentes y años salen
-# el IDF, la población y el VA? ¿en qué unidades están? ¿por qué se usa escala
-# logarítmica? ¿qué relación buscan mostrar y qué muestra la correlación? ¿qué
-# cambia al filtrar por departamento? Escriban 4 a 6 líneas con sus palabras.
 texto_explicacion_c <- "A partir del IDF municipal 2024 (DNP) (un score de 0 a 100) vs las proyecciones poblacionales del DANE para 2024 (en personas) o el VA municipal proyectado (en miles de millones de pesos corrientes), también con datos del DANE 2023, se grafica un diagrama de dispersión con filtro departamental donde parece que la población y el VA no son suficientes para explicar el desempeño fiscal. La correlación de Pearson refuerza esta afirmación, hacen falta otras variables institucionales o de gestión para explicar completamente el desempeño fiscal. Esto no hace erróneo al IDF artificial departamental (que parte de ponderadores para tener un proxy del desempeño fiscal). El gráfico expone que se debe tener cuidado al interpretarlo ya que ponderar con la población y valor agregado de cada municipio hace que sus resultados tiendan al de grandes municipios del departamento. El eje horizontal (Población o VA 2024) se presenta en log dado que algunos municipios son muy grandes y otros muy pequeños en comparación, por lo que la escala logarítmica permite distinguir según magnitud."
 
 # Formato con coma decimal
