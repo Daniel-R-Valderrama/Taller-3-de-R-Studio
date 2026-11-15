@@ -71,11 +71,27 @@ kable(resumen_faltantes,
       format.args = list(big.mark = ".", decimal.mark = ","))
 ```
 
-Municipios que están en población y VA, pero no en la base del IDF del DNP (no entran al cálculo):
+Territorios que están en población y VA, pero no en la base del IDF del DNP (no entran al cálculo). Ninguno es municipio: son áreas no municipalizadas (ANM) y la isla de San Andrés, que administra la gobernación.
 
 ```{r tabla_1_a_sin_idf, echo=FALSE}
-kable(pob_sin_idf,
-      caption = paste0("Tabla 1.A.2. Municipios sin IDF municipal (", nrow(pob_sin_idf), ")"),
+# Nombres y departamentos desde el original de población del DANE (hoja 3, encabezado en la fila 8)
+nombres_dane <- read.xlsx(file.path(ruta_taller, "Bases de Datos", "PPED-AreaMun-2018-2042_VP.xlsx"),
+                          sheet = 3, startRow = 8) %>%
+  filter(AÑO == 2024, ÁREA.GEOGRÁFICA == "Total") %>%
+  mutate(cod_mpio = formatC(as.integer(MPIO), width = 5, flag = "0")) %>%   # formatC: código municipal a 5 dígitos
+  select(cod_mpio, departamento = DPNOM, territorio = DPMP)
+
+sin_idf <- pob_sin_idf %>%
+  mutate(cod_mpio = formatC(as.integer(cod_mpio), width = 5, flag = "0")) %>%   # formatC: código municipal a 5 dígitos
+  left_join(nombres_dane, by = "cod_mpio") %>%
+  mutate(tipo = ifelse(cod_mpio == "88001",
+                       "Isla administrada por la gobernación",
+                       "Área no municipalizada")) %>%
+  select(cod_mpio, territorio, departamento, tipo, poblacion)
+
+kable(sin_idf,
+      col.names = c("Código", "Territorio", "Departamento", "Tipo", "Población 2024"),
+      caption = paste0("Tabla 1.A.2. Territorios sin IDF municipal (", nrow(sin_idf), ")"),
       format.args = list(big.mark = ".", decimal.mark = ","))
 ```
 
@@ -164,7 +180,7 @@ kable(idf_dpto,
 El IDF se calculó para `r nrow(idf_dpto)` departamentos. El más alto es `r idf_dpto$nombre_dpto[1]` (`r format(idf_dpto$idf_dpto[1], decimal.mark = ",")`) y el más bajo es `r idf_dpto$nombre_dpto[nrow(idf_dpto)]` (`r format(idf_dpto$idf_dpto[nrow(idf_dpto)], decimal.mark = ",")`).
 
 ```{r fig_1_a, echo=FALSE, out.width="100%"}
-include_graphics(file.path(ruta_resultados, "1_A_mapa_idf_dpto.png"))
+include_graphics(file.path(ruta_resultados, "1_A_mapa_idf_dpto.png"), rel_path = FALSE)
 ```
 
 ### Análisis 1.A
@@ -178,17 +194,59 @@ include_graphics(file.path(ruta_resultados, "1_A_mapa_idf_dpto.png"))
 # 1.B MAPA MUNICIPAL: DIAGNÓSTICO
 # ==============================================================================
 diagnostico_1b <- readRDS(file.path(ruta_resultados, "1_B_diagnostico.rds"))
+
+# Geometrías inválidas en cada paso (BLOQUE 8 del Punto 1)
+n_inv_original <- diagnostico_1b$original[diagnostico_1b$medida == "Geometrías inválidas"]
+n_inv_simple   <- diagnostico_1b$simplificado[diagnostico_1b$medida == "Geometrías inválidas"]
+n_inv_final    <- diagnostico_1b$simplificado[diagnostico_1b$medida == "Geometrías inválidas después de corregir"]
+
+# Enteros sin decimales y el resto con un decimal (la columna mezcla conteos y segundos)
+formato_1b <- function(x) {
+  ifelse(is.na(x), "",
+         ifelse(x == round(x),
+                formatC(x, format = "d", big.mark = "."),                         # formatC: conteos con punto de miles
+                formatC(x, format = "f", digits = 1, decimal.mark = ",")))        # formatC: un decimal con coma
+}
 ```
 
+El shapefile municipal del DANE se trabajó en tres pasos: (1) se leyó el original, (2) se simplificó con `st_simplify()` para quitar vértices y (3) se corrigieron con `st_make_valid()` las geometrías que se dañaron al simplificar. El mapa se dibuja con el resultado del paso 3.
+
+### 1.B.1 Geometrías inválidas en cada paso
+
+```{r tabla_1_b_invalidas, echo=FALSE}
+pasos_invalidas <- data.frame(
+  paso      = c("1. Shapefile original del DANE",
+                "2. Después de simplificar con st_simplify()",
+                "3. Después de corregir con st_make_valid() (versión que se usa en el mapa)"),
+  invalidas = c(n_inv_original, n_inv_simple, n_inv_final)
+)
+kable(pasos_invalidas, align = c("l", "r"),
+      col.names = c("Paso", "Geometrías inválidas"),
+      caption = "Tabla 1.B.1. La simplificación dañó geometrías y la corrección las arregló")
+```
+
+El original no tenía geometrías inválidas. La simplificación dañó `r n_inv_simple` y, después de corregirla, quedaron `r n_inv_final`: el mapa municipal se dibuja con geometrías válidas. El código del municipio afectado y la causa se imprimen en la consola al correr el BLOQUE 8 del Punto 1 (`st_is_valid(..., reason = TRUE)`).
+
+**Comentarios del grupo (qué municipio se dañó y por qué):**
+
+> *[COMENTARIO: lo escribe el grupo]*
+
+### 1.B.2 Shapefile original frente a la versión final
+
 ```{r tabla_1_b, echo=FALSE}
-kable(diagnostico_1b,
-      col.names = c("Medida", "Original", "Simplificado"),
-      caption = "Tabla 1.B. Shapefile municipal antes y después de simplificar",
-      format.args = list(big.mark = ".", decimal.mark = ","))
+# Las filas de geometrías inválidas ya están en la Tabla 1.B.1
+comparacion_1b <- diagnostico_1b %>%
+  filter(!(medida %in% c("Geometrías inválidas", "Geometrías inválidas después de corregir"))) %>%
+  mutate(original     = formato_1b(original),
+         simplificado = formato_1b(simplificado))
+
+kable(comparacion_1b, align = c("l", "r", "r"),
+      col.names = c("Medida", "Shapefile original", "Simplificado y corregido (mapa)"),
+      caption = "Tabla 1.B.2. Tamaño y tiempos del shapefile municipal (vacío: no aplica al original)")
 ```
 
 ```{r fig_1_b, echo=FALSE, out.width="100%"}
-include_graphics(file.path(ruta_resultados, "1_B_mapa_idf_mpio.png"))
+include_graphics(file.path(ruta_resultados, "1_B_mapa_idf_mpio.png"), rel_path = FALSE)
 ```
 
 ### Análisis 1.B: problemas computacionales encontrados
@@ -223,7 +281,7 @@ kable(ibr_on %>% filter(fecha %in% fechas_contraste),
 ```
 
 ```{r fig_2_a, echo=FALSE, out.width="100%"}
-include_graphics(file.path(ruta_resultados, "2_A_ibr_on_diaria.png"))
+include_graphics(file.path(ruta_resultados, "2_A_ibr_on_diaria.png"), rel_path = FALSE)
 ```
 
 **Comentarios del grupo (serie, unidad, convención, contraste y correcciones):**
@@ -256,7 +314,7 @@ kable(sofr_on %>% filter(fecha %in% fechas_contraste),
 ```
 
 ```{r fig_2_b, echo=FALSE, out.width="100%"}
-include_graphics(file.path(ruta_resultados, "2_B_sofr_on_diaria.png"))
+include_graphics(file.path(ruta_resultados, "2_B_sofr_on_diaria.png"), rel_path = FALSE)
 ```
 
 **Comentarios del grupo (serie, unidad, convención, contraste y correcciones):**
@@ -305,7 +363,7 @@ kable(dias_sin_dato,
 Cada tasa se promedió por mes sobre sus propios días hábiles: `r nrow(tasas_mensual)` meses, entre `r min(tasas_mensual$dias_ibr)` y `r max(tasas_mensual$dias_ibr)` días por mes para la IBR y entre `r min(tasas_mensual$dias_sofr)` y `r max(tasas_mensual$dias_sofr)` para la SOFR.
 
 ```{r fig_2_c, echo=FALSE, out.width="100%"}
-include_graphics(file.path(ruta_resultados, "2_C_doble_eje_mensual.png"))
+include_graphics(file.path(ruta_resultados, "2_C_doble_eje_mensual.png"), rel_path = FALSE)
 ```
 
 **Frecuencia elegida y tratamiento de las fechas sin observación:**
@@ -383,7 +441,7 @@ kable(top3,
 
 **Comentarios del grupo:**
 
-> En esta pestaña se presenta un mapa interactivo construido directamente en `plotly` (`plot_ly()` con `add_sf()`) que representa el **IDF departamental ponderado** de 2024, clasificado mediante los mismos **cortes naturales de Jenks** y paleta `YlGnBu` del Punto 1.A. Al hacer clic sobre cualquier polígono departamental (capturando el evento con `event_data("plotly_click")` y el atributo `meta`) o seleccionarlo en la lista desplegable (necesario para consultar el Archipiélago de San Andrés, Providencia y Santa Catalina), la aplicación resalta el contorno del departamento seleccionado, actualiza el indicador superior con su índice departamental ponderado y filtra la tabla lateral (`DT`) con el **top 3 de municipios según su IDF municipal individual** oficial del DNP (sin ponderar).
+> *[COMENTARIO: lo escribe el grupo]*
 
 ## 3.B Doble eje interactivo y devaluación implícita
 
@@ -410,15 +468,13 @@ kable(ejemplos_dev,
 
 **Comentarios del grupo (instrucciones de uso, unidad del resultado, fechas sin tasa):**
 
-> La segunda pestaña integra un gráfico interactivo de doble eje en `plotly` (SOFR ON en el eje izquierdo e IBR ON en el eje derecho) que permite alternar entre el **promedio mensual** y la **serie diaria de días hábiles**, junto con una línea vertical punteada que marca la fecha consultada. Para calcular la **devaluación implícita** ($\pi$), el usuario ingresa o selecciona una fecha entre `2020-01-01` y `2025-10-31`; la aplicación consulta las tasas diarias correspondientes, las convierte a formato decimal ($\text{porcentaje} \div 100$) y aplica $\pi = \frac{1 + i_d}{1 + i_e} - 1$. Dado que la IBR overnight (serie 241, nominal base 360) y la SOFR overnight (Actual/360) se expresan como **tasas anuales**, el resultado corresponde a una **tasa de devaluación implícita anual expresada en porcentaje (%)**. En fines de semana y días hábiles asimétricos (festivos en Colombia o en Estados Unidos donde falta alguna de las dos series), las tarjetas superiores indican `"Sin dato"` y `"No calculable"`, y se despliega un recuadro de advertencia especificando exactamente qué tasa no cotizó en esa fecha en lugar de arrojar un error de ejecución.
+> *[COMENTARIO: lo escribe el grupo]*
 
 ## 3.C Gráfica libre
 
 **Datos usados y qué se busca mostrar:**
 
-> Para la visualización libre se integraron las bases municipales consolidadas en el Punto 1: el **Índice de Desempeño Fiscal (IDF)** municipal 2024 publicado por el DNP (puntaje de 0 a 100), las **proyecciones de población** municipal para 2024 del DANE (en personas) y el **Valor Agregado (VA)** municipal del DANE de 2023 proyectado a 2024 con el crecimiento nominal del PIB nacional (en miles de millones de pesos corrientes). El diagrama de dispersión interactivo relaciona en el eje vertical el IDF municipal frente al tamaño poblacional o económico del municipio en el eje horizontal (intercambiable mediante selector), permitiendo filtrar por uno o varios departamentos, activar escala logarítmica ($\log_{10}$) en el eje horizontal para distinguir municipios de distinta magnitud frente a la asimetría de las grandes capitales y superponer una recta de tendencia lineal junto con el coeficiente de correlación de Pearson dinámico.
->
-> El objetivo analítico de esta gráfica es evaluar si el tamaño poblacional o económico de un municipio explica por sí solo su desempeño fiscal, así como ilustrar una precaución metodológica clave del Punto 1.A: dado que el IDF departamental se pondera por población y valor agregado, su valor tiende a reflejar principalmente el comportamiento de los municipios más grandes y con mayor actividad económica dentro de cada departamento, aun cuando la correlación lineal entre tamaño y desempeño fiscal municipal sea moderada o requiera variables institucionales adicionales para explicarse por completo.
+> *[INTERPRETACIÓN: la escribe el grupo]*
 
 # Notas de entrega
 
@@ -433,4 +489,3 @@ kable(ejemplos_dev,
 **Enlace o anexo de la conversación:**
 
 > *[COMENTARIO: lo escribe el grupo]*
-
