@@ -703,6 +703,27 @@ shp_mpio_simple <- shp_mpio_simple %>%
 # Verificación
 table(st_geometry_type(shp_mpio_simple))   # debe quedar solo MULTIPOLYGON
 class(st_geometry(shp_mpio_simple))        # debe ser sfc_MULTIPOLYGON
+
+# ---------- Geometrías que quedaron inválidas al simplificar ----------
+# CUIDADO: el original tenía 0 inválidas, pero quitar vértices puede hacer que
+# un borde se cruce consigo mismo. Se cuentan ANTES de corregir para el 1B.
+invalidas_simple   <- !st_is_valid(shp_mpio_simple)
+n_invalidas_simple <- sum(invalidas_simple)
+shp_mpio_simple$cod_mpio[invalidas_simple]                        # qué municipio se dañó
+st_is_valid(shp_mpio_simple[invalidas_simple, ], reason = TRUE)   # por qué es inválido
+
+shp_mpio_simple <- shp_mpio_simple %>%
+  st_make_valid() %>%                    # Función no vista: corrige geometrías inválidas
+  st_collection_extract("POLYGON") %>%   # Función no vista: deja solo los polígonos
+  st_cast("MULTIPOLYGON")                # Función no vista: lleva todo a MULTIPOLYGON
+
+# Verificación Programática: después de corregir no quedan geometrías inválidas
+if (sum(!st_is_valid(shp_mpio_simple)) > 0) {
+  cat("Alerta: siguen quedando geometrías inválidas después de corregir\n")
+} else {
+  cat("Verificación exitosa: se corrigieron", n_invalidas_simple, "geometrías inválidas\n")
+}
+nrow(shp_mpio_simple) == nrow(shp_mpio)  # no se pierden municipios
 print(object.size(shp_mpio_simple), units = "Mb")
 n_vertices_simple <- nrow(st_coordinates(shp_mpio_simple))   # Función no vista: extrae los vértices
 cat("Vértices después de simplificar:", format(n_vertices_simple, big.mark = ".", decimal.mark = ","),
@@ -787,13 +808,13 @@ file.exists(file.path(ruta_resultados, "1_B_mapa_idf_mpio.png"))
 
 # ---------- Insumos para la explicación del 1B ----------
 diagnostico_1b <- data.frame(
-  medida = c("Polígonos", "Geometrías inválidas", "Vértices",
+  medida = c("Polígonos", "Geometrías inválidas", "Geometrías inválidas después de corregir", "Vértices",
              "Tamaño en memoria (Mb)", "Segundos para dibujar",
              "Segundos para simplificar", "Segundos para exportar el mapa final"),
-  original = c(nrow(shp_mpio), n_invalidas, n_vertices,
+  original = c(nrow(shp_mpio), n_invalidas, NA, n_vertices,
                round(as.numeric(object.size(shp_mpio)) / 1024^2, 1),
                round(tiempo_original[["elapsed"]], 1), NA, NA),
-  simplificado = c(nrow(shp_mpio_simple), sum(!st_is_valid(shp_mpio_simple)), n_vertices_simple,
+  simplificado = c(nrow(shp_mpio_simple), n_invalidas_simple, sum(!st_is_valid(shp_mpio_simple)), n_vertices_simple,
                    round(as.numeric(object.size(shp_mpio_simple)) / 1024^2, 1),
                    round(tiempo_simple[["elapsed"]], 1),
                    round(tiempo_simplificar[["elapsed"]], 1),
@@ -1809,7 +1830,7 @@ fuente_tasas <- paste0("Fuente: Banco de la República, SUAMECA (serie 241, web 
 # el IDF, la población y el VA? ¿en qué unidades están? ¿por qué se usa escala
 # logarítmica? ¿qué relación buscan mostrar y qué muestra la correlación? ¿qué
 # cambia al filtrar por departamento? Escriban 4 a 6 líneas con sus palabras.
-texto_explicacion_c <- "A partir del IDF municipal 2024 (DNP) (un score de 0 a 100) vs las proyecciones poblacionales del DANE para 2024 (en personas) o el VA municipal proyectado (en miles de millones de pesos corrientes), también con datos del DANE 2023, se grafica un diagrama de dispersión con filtro departamental donde parece que la población y el VA no son suficientes para explicar el desempeño fiscal. La correlación de Pearson refuerza esta afirmación, hacen falta otras variables institucionales o de gestión para explicar completamente el desempeño fiscal. Esto no hace erróneo al IDF artificial departamental (que parte de ponderadores para tener un proxy del desempeño fiscal). El gráfico expone que se debe tener cuidado al interpretarlo ya que ponderar con la población y valor agregado de cada municipio hace que sus resultados tiendan al de grandes municipios del departamento. El eje horizontal (Población o VA 2024) se presenta en log dado que algunos municipios son muy grandes y otros muy pequeños en comparación, por lo que la escala logarítmica permite distinguir según magnitud."
+texto_explicacion_c <- "[ESCRIBAN AQUÍ la explicación de los datos y de lo que muestra la gráfica.]"
 
 # Formato con coma decimal
 fmt <- function(x, d = 1) {
@@ -2170,7 +2191,7 @@ server <- function(input, output, session) {
   
   output$grafico_c <- renderPlotly({
     d <- datos_c()
-    validate(need(nrow(d) > 2, "Hay muy pocos municipios con los filtros elegidos."))
+    shiny::validate(shiny::need(nrow(d) > 2, "Hay muy pocos municipios con los filtros elegidos."))
     
     etiqueta_x <- if (input$x_c == "poblacion") "Población 2024 (personas)" else
       "VA 2024 proyectado (miles de millones de pesos corrientes)"
