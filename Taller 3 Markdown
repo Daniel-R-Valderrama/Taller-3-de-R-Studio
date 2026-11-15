@@ -108,7 +108,7 @@ kable(base_mun %>%
 
 **Comentarios del grupo (llaves y municipios que no entran):**
 
-> *[COMENTARIO: lo escribe el grupo]*
+> La Tabla 1.A.1 muestra que los 1.103 municipios de la base del IDF del DNP encontraron pareja en las bases de población 2024 y valor agregado 2023 del DANE, así que ninguno quedó sin alguno de los tres datos. La Tabla 1.A.2 hace el cruce en sentido contrario: hay 20 códigos que están en las bases del DANE pero no tienen IDF, por lo que no entran al cálculo. Ninguno corresponde a un municipio. Son 19 áreas no municipalizadas (9 de Amazonas, 7 de Guainía y 3 de Vaupés) y San Andrés, que no cuenta como municipio porque está bajo la jurisdicción directa de la gobernación. Llama la atención Mapiripana (94663), que aparece con población 0 y valor agregado 0. En la Tabla 1.A.3 vemos que Nuevo Belén de Bajirá sí tiene IDF, pero su valor agregado es 0. Por eso su ponderador es 0 y no influye en el IDF del Chocó. La razón más probable es que el municipio se creó en diciembre de 2023 y el DANE todavía no le reporta un valor agregado propio.
 
 ### 1.A.2 Proyección del valor agregado 2023 a 2024
 
@@ -123,7 +123,7 @@ VA 2024 = VA 2023 × (1 + `r format(tasa_pib_2024, decimal.mark = ",")` / 100).
 
 **Justificación de la tasa elegida:**
 
-> *[INTERPRETACIÓN: la escribe el grupo]*
+> Calculamos el crecimiento del PIB de Colombia en 2024 a precios corrientes, porque el valor agregado municipal está expresado en esos mismos precios. Usamos el PIB nominal reportado por el DANE: 1.713.316 miles de millones de pesos en 2024 (dato provisional) y 1.587.200 miles de millones en 2023. Estos datos salen del Anexo PIB total por departamentos, consultado el 1 de noviembre de 2026. La tasa resultante es 7,95 %, redondeada a dos decimales como pide el enunciado, y coincide con el 7,9 % que publica el boletín de Cuentas Nacionales 2024p. Descartamos el crecimiento real porque excluye la inflación, y aplicarlo a un valor agregado en pesos corrientes lo subestimaría. Por simplicidad, digitamos las cifras a mano en el script en lugar de extraerlas de una base de datos, y el chunk p1_a_tasa comprueba la cuenta.
 
 ### 1.A.3 Ponderadores y comprobación del cálculo
 
@@ -164,7 +164,7 @@ kable(comprobacion %>%
 
 **Comentarios del grupo (verificaciones):**
 
-> *[COMENTARIO: lo escribe el grupo]*
+> El IDF departamental se calcula como la suma del IDF de cada municipio multiplicado por su ponderador w. Para comprobar el resultado lo calculamos también con weighted.mean(). La Tabla 1.A.4 muestra que los dos valores coinciden en los 33 departamentos y que en todos los ponderadores suman 1. Además, cada IDF departamental queda entre el mínimo y el máximo de sus municipios. Una verificación adicional muestra que el IDF departamental es idéntico si se usa el valor agregado de 2023 o el proyectado a 2024. Como todos los municipios crecen a la misma tasa, el factor de crecimiento aparece en el numerador y en el denominador de w y se cancela, así que la proyección no cambia el resultado. La mayoría de los departamentos tiene mucha variación entre sus municipios: casi todos los mínimos están entre 32 y 46 y casi todos los máximos entre 62 y 81, con Boyacá (81,1) y Nariño (80,0) en el extremo superior. Las excepciones son San Andrés, porque solo Providencia y Santa Catalina es municipio, y Bogotá, que como Distrito Capital cuenta como departamento. También tienen rangos estrechos Vaupés, Vichada, Amazonas y Guainía, que tienen entre 2 y 4 municipios cada uno.
 
 ### 1.A.4 IDF departamental
 
@@ -185,7 +185,7 @@ include_graphics(file.path(ruta_resultados, "1_A_mapa_idf_dpto.png"), rel_path =
 
 ### Análisis 1.A
 
-> *[INTERPRETACIÓN: la escribe el grupo]*
+> Los departamentos con mayor IDF son Bogotá (77,0), Atlántico (73,0) y Antioquia (69,6), y los de menor IDF son Caquetá (42,1), Vichada (46,2) y La Guajira (46,9). Como referencia usamos la media nacional, es decir, el promedio de los IDF de los 33 departamentos. En la región Andina la mayoría está por encima de la media nacional, salvo Huila y Tolima, y en el Caribe pasa lo mismo, salvo La Guajira y Sucre. La región Pacífica está dividida: Chocó y Valle del Cauca quedan por debajo, y Cauca y Nariño por encima. En la Orinoquía solo Vichada está por debajo, mientras que en la Amazonía todos lo están menos Guaviare. San Andrés, Providencia y Santa Catalina (55,2) también queda por debajo, aunque su cálculo solo incluye a Providencia y Santa Catalina. La ponderación ayuda a explicar este ranking. El ponderador combina población y valor agregado, así que los municipios más grandes pesan mucho más que los pequeños. Por eso el IDF departamental puede alejarse bastante del promedio simple de sus municipios: Atlántico pasa de 57,1 a 73,0 y Antioquia de 54,8 a 69,6, mientras Caquetá baja de 55,2 a 42,1 y La Guajira de 56,9 a 46,9. En los dos primeros, los municipios de mayor peso tienen un IDF más alto que el resto del departamento. En los dos últimos ocurre lo contrario.
 
 ## 1.B Mapa del IDF municipal
 
@@ -251,7 +251,7 @@ include_graphics(file.path(ruta_resultados, "1_B_mapa_idf_mpio.png"), rel_path =
 
 ### Análisis 1.B: problemas computacionales encontrados
 
-> *[INTERPRETACIÓN: la escribe el grupo]*
+> Logramos hacer el mapa municipal, pero el shapefile presentó varios problemas. El primero fue el tamaño: sus 1.122 polígonos, entre municipios y áreas no municipalizadas, suman 6,2 millones de vértices y ocupan 95,6 Mb en memoria. Ese detalle sobra para un mapa del país, así que simplificamos las geometrías con st_simplify(), que se basa en el algoritmo de Douglas-Peucker. Este algoritmo elimina los vértices que, al quitarlos, mueven el borde menos que una tolerancia dada (500 m en nuestro caso). Como muestra la Tabla 1.B.2, el shapefile quedó en cerca de 60 mil vértices y 1,8 Mb, y el tiempo de dibujo bajó de 6,7 s a 0,7 s. La simplificación generó otros dos problemas. Primero, volvió inválidas algunas geometrías, que reparamos con st_make_valid(). Segundo, después de esos dos pasos la columna de geometría quedó con tipos mezclados (POLYGON, MULTIPOLYGON y algunas GEOMETRYCOLLECTION), aunque el archivo original no los tenía. Con esa mezcla, sf trata la columna como una geometría genérica y st_coordinates() falla, así que no podíamos contar los vértices. Lo resolvimos sacando los polígonos de las colecciones con st_collection_extract(“POLYGON”) y convirtiendo todo a MULTIPOLYGON. La Tabla 1.B.1 muestra las geometrías inválidas en cada paso: ninguna en el original, algunas después de simplificar y ninguna después de la corrección. Ninguno de estos problemas cambia el IDF, porque los cálculos no usan geometrías. En el mapa, el gris marca las zonas sin IDF (las áreas no municipalizadas y San Andrés), y los recuadros muestran San Andrés y Providencia y Santa Catalina, que por su ubicación no caben en el mapa principal.
 
 # Punto 2. Web scraping y API
 
