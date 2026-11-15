@@ -235,9 +235,6 @@ kable(pasos_invalidas, align = c("l", "r"),
 
 El original no tenía geometrías inválidas. La simplificación dañó `r n_inv_simple` y, después de corregirla, quedaron `r n_inv_final`: el mapa municipal se dibuja con geometrías válidas. El código del municipio afectado y la causa se imprimen en la consola al correr el BLOQUE 8 del Punto 1 (`st_is_valid(..., reason = TRUE)`).
 
-**Comentarios del grupo (qué municipio se dañó y por qué):**
-
-> *[COMENTARIO: lo escribe el grupo]*
 
 ### 1.B.2 Shapefile original frente a la versión final
 
