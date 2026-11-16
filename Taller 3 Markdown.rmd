@@ -230,10 +230,10 @@ pasos_invalidas <- data.frame(
 )
 kable(pasos_invalidas, align = c("l", "r"),
       col.names = c("Paso", "Geometrías inválidas"),
-      caption = "Tabla 1.B.1. La simplificación dañó geometrías y la corrección las arregló")
+      caption = "Tabla 1.B.1. Geometrías inválidas en cada paso")
 ```
 
-El original no tenía geometrías inválidas. La simplificación dañó `r n_inv_simple` y, después de corregirla, quedaron `r n_inv_final`: el mapa municipal se dibuja con geometrías válidas. El código del municipio afectado y la causa se imprimen en la consola al correr el BLOQUE 8 del Punto 1 (`st_is_valid(..., reason = TRUE)`).
+El shapefile original tenía `r n_inv_original` geometrías inválidas, después de simplificar quedaron `r n_inv_simple` y después de corregir, `r n_inv_final`: el mapa municipal se dibuja con geometrías válidas. Si alguna geometría resultara inválida, el BLOQUE 8 del Punto 1 imprime en la consola el código del municipio y la causa (`st_is_valid(..., reason = TRUE)`).
 
 
 ### 1.B.2 Shapefile original frente a la versión final
@@ -425,7 +425,7 @@ kable(extremos,
 
 # Punto 3. Aplicativo Shiny
 
-El aplicativo está en `Taller_3.R` (sección del Punto 3).
+El aplicativo está en `app_shiny/app.R` y lee sus datos de `app_shiny/datos/`. Se abre con el botón *Run App* de RStudio (con `app.R` abierto) o con la línea de `runApp()` al final de `Taller3.R`.
 
 ## 3.A Mapa interactivo del IDF departamental
 

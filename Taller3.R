@@ -492,7 +492,6 @@ file.exists(file.path(ruta_resultados, "1_A_verificacion_uniones.xlsx"))
 # Coincide con el 7,9 % a precios corrientes del boletín de Cuentas Nacionales Anuales 2024p.
 # El anexo no se carga en R; la tasa queda como constante.
 tasa_pib_2024 <- 7.95                    # crecimiento % del PIB nominal 2024, redondeado a dos decimales
-# [INTERPRETACIÓN: la justificación de la tasa la escribe el grupo]
 
 # Verificación: la constante coincide con el cálculo desde los valores del anexo
 round((1713316 - 1587200) / 1587200 * 100, 2) == tasa_pib_2024   # debe dar TRUE
@@ -683,8 +682,6 @@ ggsave(filename = file.path(ruta_resultados, "1_A_mapa_idf_dpto.png"),
 # Verificación
 file.exists(file.path(ruta_resultados, "1_A_mapa_idf_dpto.png"))
 
-# [INTERPRETACIÓN: la escribe el grupo en el .Rmd]
-
 
 # =============================================================================
 # BLOQUE 8. MAPA MUNICIPAL (PUNTO 1B)
@@ -844,8 +841,6 @@ diagnostico_1b <- data.frame(
                    round(tiempo_mapa_mpio[["elapsed"]], 1))
 )
 diagnostico_1b
-
-# [INTERPRETACIÓN: la explicación de los problemas computacionales la escribe el grupo]
 
 
 # =============================================================================
@@ -1833,8 +1828,6 @@ if (!all(file.exists(archivos_doble))) {
 saveRDS(ibr_on,        file.path(ruta_app_datos, "ibr_on.rds"))
 saveRDS(sofr_on,       file.path(ruta_app_datos, "sofr_on.rds"))
 saveRDS(tasas_mensual, file.path(ruta_app_datos, "tasas_mensual.rds"))
-
-# [INTERPRETACIÓN: la comparación de tendencias de la IBR y la SOFR la escribe el grupo]
 
 # ---------- Memoria ----------
 rm(ibr_recuperada, filas_antes)
